@@ -30,7 +30,7 @@ markAbsentCron()
 app.get("/", (req, res) => {
   res.send("Gym Registration API running");
 });
-const PORT = process.env.PORT || 80;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
 });
