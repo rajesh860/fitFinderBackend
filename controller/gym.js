@@ -406,7 +406,7 @@ export const updateGym = async (req, res) => {
     }
 
     // ✅ Update only sent fields
-    const updatedGym = await Gym.findByIdAndUpdate(gymId, updateData, {
+    const updatedGym = await Gym.findOneAndUpdate({ user: gymId }, updateData, {
       new: true,
     });
 
