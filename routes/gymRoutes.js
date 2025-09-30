@@ -42,4 +42,5 @@ router.put("/plan-update/:id",authMiddleware, updateGymPlan);
 router.post("/add-progress/:memberId",authMiddleware, addProgressUserByGym);
 router.get("/get-progress/:memberId",authMiddleware, getProgressUserOfGym);
 router.get("/list", getAllGymList);
+
 export default router;

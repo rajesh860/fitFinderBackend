@@ -6,44 +6,6 @@ import {generateOtp, sendOtpEmail} from "../otpService.js"
 
 
 
-// export const register = async (req, res) => {
-//   try {
-//     const { email, otp } = req.body;
-//     const tempStore = req.app.locals.tempOtpStore || {};
-//     const data = tempStore[email];
-
-//     if (!data) return res.status(400).json({ success: false, message: "No OTP request found" });
-//     if (data.expiry < Date.now()) return res.status(400).json({ success: false, message: "OTP expired" });
-//     if (data.otp !== otp) return res.status(400).json({ success: false, message: "Invalid OTP" });
-
-//     // ✅ OTP verified → actual register karo
-//     const user = new User({
-//       name: data.name,
-//       email: data.email,
-//       phone: data.phone,
-//       password: data.password,
-//       userRole: data.userRole,
-//     });
-//     await user.save();
-
-//     if (data.userRole === "gym") {
-//       await new Gym({ user: user._id }).save();
-//     } else if (data.userRole === "member") {
-//       await new Member({ user: user._id }).save();
-//     } else if (data.userRole === "admin") {
-//       await new Admin({ user: user._id }).save();
-//     }
-
-//     // clear temp store
-//     delete tempStore[email];
-
-//     return res.json({ success: true, message: "Registration successful after OTP verification", user });
-//   } catch (err) {
-//     res.status(500).json({ success: false, message: err.message });
-//   }
-// };
-
-
 
 export const requestOtp = async (req, res) => {
   try {
@@ -51,7 +13,7 @@ export const requestOtp = async (req, res) => {
 
     console.log(req.body, "Incoming OTP Request");
 
-    // Admin check
+    // 🔒 Admin check: only one admin allowed
     if (userRole === "admin") {
       const adminExist = await User.findOne({ userRole: "admin" });
       if (adminExist) {
@@ -62,28 +24,28 @@ export const requestOtp = async (req, res) => {
       }
     }
 
-    // Check if email already registered
+    // 🔍 Email existence check (for gym, member, admin)
     const exist = await User.findOne({ email });
     if (exist) {
       return res.status(400).json({ success: false, message: "Email already registered" });
     }
 
-    // Generate OTP
+    // 🔢 Generate OTP
     const otp = generateOtp();
-    const expiry = Date.now() + 5 * 60 * 1000; // 5 min in milliseconds
+    const expiry = Date.now() + 5 * 60 * 1000; // 5 minutes
 
-    // Store in temp collection
+    // 🧠 Store OTP and user data in temporary memory
     req.app.locals.tempOtpStore = req.app.locals.tempOtpStore || {};
     req.app.locals.tempOtpStore[email] = { name, email, phone, password, userRole, otp, expiry };
 
-    // Send OTP email
+    // ✉️ Send OTP email
     await sendOtpEmail(email, otp);
 
-    // Send response with expiry timestamp
+    // ✅ Send response with OTP expiry info
     return res.json({ 
       success: true, 
       message: "OTP sent to email. Valid for 5 minutes.", 
-      otpExpiry: expiry // frontend can use this to show countdown
+      otpExpiry: expiry 
     });
 
   } catch (err) {
@@ -91,6 +53,7 @@ export const requestOtp = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 
 
@@ -113,16 +76,25 @@ export const verifyOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid OTP" });
     }
 
-    // create actual user in DB
-    const user = new User({
+    // 🧠 Create user object
+    const userData = {
       name: tempUser.name,
       email: tempUser.email,
       phone: tempUser.phone,
-      password: tempUser.password, // hash karna mat bhoolna
-      userRole: tempUser.userRole
-    });
+      password: tempUser.password, // ⚠️ hash this before saving (bcrypt)
+      userRole: tempUser.userRole,
+    };
+
+    // 🏋️ If user is gym, set status = pending
+    if (tempUser.userRole === "gym") {
+      userData.status = "pending"; // 👈 default pending until approved
+    }
+
+    // 💾 Save User in DB
+    const user = new User(userData);
     await user.save();
 
+    // 🧩 Role-based profile creation
     if (tempUser.userRole === "gym") {
       await new Gym({ user: user._id }).save();
     } else if (tempUser.userRole === "member") {
@@ -131,11 +103,28 @@ export const verifyOtp = async (req, res) => {
       await new Admin({ user: user._id }).save();
     }
 
-    // ✅ delete from temp store
+    // 🧹 Clean temp store
     delete req.app.locals.tempOtpStore[email];
-    res.json({ success: true, message: "Registration successful" });
+
+    // ✅ Custom response for gym registration
+    if (tempUser.userRole === "gym") {
+      return res.json({
+        success: true,
+        message:
+          "Your registration request has been submitted successfully. Your account will be activated within 4 hours as per our rules and guidelines.",
+      });
+    }
+
+    // ✅ Default success message for other roles
+    return res.json({
+      success: true,
+      message: "Registration successful",
+    });
+
   } catch (err) {
-    console.log(err)
+    console.error(err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+

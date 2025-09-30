@@ -35,14 +35,11 @@ export const upload = multer({ storage: storage });
 // GET /gym/pending
 export const getPending = async (req, res) => {
   try {
-    const gyms = await Gym.find({ status: "pending" });
+    const gyms = await User.find({userRole:"gym", status: "pending" });
    // Add base URL to images
-const gymsWithFullImages = gyms.map(gym => {
-  const fullImages = gym.images.map(img => `${process.env.DOMAIN}/${img}`);
-  return { ...gym.toObject(), images: fullImages };
-});
 
-res.json(gymsWithFullImages);
+
+res.json(gyms);
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server Error" });
