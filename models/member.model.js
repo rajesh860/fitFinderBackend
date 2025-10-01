@@ -40,11 +40,11 @@ const MemberSchema = new mongoose.Schema(
       default: "pending",
     },
 
-    blood_group: {
-      type: String,
-      enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", ""],
-      default: "",
-    },
+    // blood_group: {
+    //   type: String,
+    //   enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", ""],
+    //   default: "",
+    // },
     medical_conditions: [String],
     injuries: [String],
     fitness_goals: [String],

@@ -86,7 +86,7 @@ export const findSignalUser = async (req, res) => {
     const progress = await Progress.findOne({
       member: userProfile?._id,
     }).lean();
-    console.log(progress, "progress");
+    // console.log(progress, "progress");
 
     //    const attendance = await Attendance.findOne({
     //   member: id,
@@ -226,6 +226,7 @@ export const updateUserProfile = async (req, res) => {
 
     // ✅ Fetch current user
     const getUser = await Member.findOne({ user: memberId });
+    console.log(getUser, memberId, "getUser");
     // console.log(getUser,memberId,"getUser")
     if (!getUser) {
       return res
