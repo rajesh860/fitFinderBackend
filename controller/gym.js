@@ -318,7 +318,6 @@ export const gymProfile = async (req, res) => {
       email: user?.email,
       phone: user?.phone,
     };
-    console.log(updatedData, "bm,nmn k");
     if (!gym) {
       return res.status(404).json({ success: false, message: "Gym not found" });
     }

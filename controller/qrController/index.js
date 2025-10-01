@@ -7,9 +7,10 @@ import Member from "../../models/member.model.js";
 // ✅ Generate QR for a Gym
 export const generateGymQR = async (req, res) => {
   try {
-    const { gymId } = req.user.id;
+    const gymId = req.user.id;
 
     const gym = await Gym.findOne({ user: gymId });
+    console.log(gym, gymId);
     if (!gym)
       return res.status(404).json({ success: false, message: "Gym not found" });
 
@@ -42,7 +43,7 @@ export const scanGymQR = async (req, res) => {
   try {
     const { qrData } = req.body; // QR se JSON milega
     const userId = req.user?.id; // Logged in user
-
+    console.log(qrData, userId);
     if (!qrData)
       return res
         .status(400)
