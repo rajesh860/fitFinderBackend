@@ -7,14 +7,19 @@ const MeasurementHistorySchema = new mongoose.Schema({
   waist: Number,
   thigh: Number,
   chest: Number,
+  bloodGroup: String,
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "GymOwner" },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
 });
 
 const ProgressSchema = new mongoose.Schema({
-  member: { type: mongoose.Schema.Types.ObjectId, ref: "Member", required: true },
+  member: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Member",
+    required: true,
+  },
   gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym", required: true },
-  
+
   current: {
     weight: Number,
     height: Number,
@@ -22,11 +27,12 @@ const ProgressSchema = new mongoose.Schema({
     waist: Number,
     thigh: Number,
     chest: Number,
+    bloodGroup: String,
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "GymOwner" },
-    updatedAt: { type: Date, default: Date.now }
+    updatedAt: { type: Date, default: Date.now },
   },
-  
-  history: [MeasurementHistorySchema]
+
+  history: [MeasurementHistorySchema],
 });
 
 const Progress = mongoose.model("Progress", ProgressSchema);

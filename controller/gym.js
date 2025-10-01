@@ -22,27 +22,19 @@ export const storage = multer.diskStorage({
   },
 });
 
-
 export const upload = multer({ storage: storage });
 // POST /gym/register
-
-
-
-
-
-
-
 
 // GET /gym/pending
 export const getPending = async (req, res) => {
   try {
-    const gyms = await User.find({ userRole: "gym", status: "pending" }).select('-password');
-   // Add base URL to images
+    const gyms = await User.find({ userRole: "gym", status: "pending" }).select(
+      "-password"
+    );
+    // Add base URL to images
 
-
-   res.json({data:gyms,status:200,success:true});
+    res.json({ data: gyms, status: 200, success: true });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
@@ -51,12 +43,15 @@ export const getPending = async (req, res) => {
 export const approveGym = async (req, res) => {
   try {
     const { gym_id } = req.params;
-    const gym = await User.findByIdAndUpdate(gym_id, { status: "active", updated_at: Date.now() }, { new: true });
-      // ✅ 2. Send Email Notification
+    const gym = await User.findByIdAndUpdate(
+      gym_id,
+      { status: "active", updated_at: Date.now() },
+      { new: true }
+    );
+    // ✅ 2. Send Email Notification
     await sendGymApprovalEmail(gym.email, gym.name);
-    res.json({ success: true, message: "Gym Activated successfully", });
+    res.json({ success: true, message: "Gym Activated successfully" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
@@ -66,10 +61,13 @@ export const rejectGym = async (req, res) => {
   try {
     const { gym_id } = req.params;
     const { reason } = req.body;
-    const gym = await Gym.findByIdAndUpdate(gym_id, { status: "rejected", updated_at: Date.now() }, { new: true });
-    res.json({ success: true, message: "Gym rejected successfully", });
+    const gym = await Gym.findByIdAndUpdate(
+      gym_id,
+      { status: "rejected", updated_at: Date.now() },
+      { new: true }
+    );
+    res.json({ success: true, message: "Gym rejected successfully" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
@@ -79,11 +77,13 @@ export const suspendGym = async (req, res) => {
     const { gym_id } = req.params;
     const { status } = req.body;
     const { reason } = req.body;
-    console.log(status,gym_id)
-    const gym = await Gym.findByIdAndUpdate(gym_id, { status: status, updated_at: Date.now() }, { new: true });
-    res.json({ success: true, message: `Gym ${status} successfully`, });
+    const gym = await Gym.findByIdAndUpdate(
+      gym_id,
+      { status: status, updated_at: Date.now() },
+      { new: true }
+    );
+    res.json({ success: true, message: `Gym ${status} successfully` });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
@@ -113,8 +113,6 @@ export const getGymList = async (req, res) => {
       })
       .lean(); // makes mapping easier
 
-    console.log(gyms, "GYMS FOUND");
-
     // ✅ Get all gym plans
     const gymsPlan = await GymPlan.find().lean();
 
@@ -142,16 +140,9 @@ export const getGymList = async (req, res) => {
 
     res.json({ success: true, data: gymsWithFullImages });
   } catch (err) {
-    console.error("Error fetching gyms:", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
-
-
-
-
-
-
 
 export const getAllGymList = async (req, res) => {
   try {
@@ -170,11 +161,14 @@ export const getAllGymList = async (req, res) => {
     const limitNumber = parseInt(limit, 10) || 3;
 
     // ✅ Convert query params to numbers safely
-    const minPriceNum = minPrice && minPrice !== "undefined" ? parseInt(minPrice) : undefined;
-    const maxPriceNum = maxPrice && maxPrice !== "undefined" ? parseInt(maxPrice) : undefined;
+    const minPriceNum =
+      minPrice && minPrice !== "undefined" ? parseInt(minPrice) : undefined;
+    const maxPriceNum =
+      maxPrice && maxPrice !== "undefined" ? parseInt(maxPrice) : undefined;
     const latNum = lat && lat !== "undefined" ? parseFloat(lat) : undefined;
     const lngNum = lng && lng !== "undefined" ? parseFloat(lng) : undefined;
-    const maxDistanceNum = maxDistance && maxDistance !== "undefined" ? parseInt(maxDistance) : 1000;
+    const maxDistanceNum =
+      maxDistance && maxDistance !== "undefined" ? parseInt(maxDistance) : 1000;
 
     // Base filter
     let filter = {};
@@ -197,17 +191,22 @@ export const getAllGymList = async (req, res) => {
 
     // Attach images & plans
     let gymsWithFullImages = gyms.map((gym) => {
-      const fullImages = (gym.images || []).map((img) => `${process.env.DOMAIN}/${img}`);
-      const coverImage = `${process.env.DOMAIN}/${gym.coverImage}`
+      const fullImages = (gym.images || []).map(
+        (img) => `${process.env.DOMAIN}/${img}`
+      );
+      const coverImage = `${process.env.DOMAIN}/${gym.coverImage}`;
 
       // Match plans
-      let plans = gymsPlan.filter(plan => plan.gymId?.toString() === gym._id.toString());
+      let plans = gymsPlan.filter(
+        (plan) => plan.gymId?.toString() === gym._id.toString()
+      );
 
       // Apply price filter only if minPrice or maxPrice provided
       if (minPriceNum !== undefined || maxPriceNum !== undefined) {
-        plans = plans.filter(plan => {
+        plans = plans.filter((plan) => {
           const price = plan.price || 0;
-          if (minPriceNum !== undefined && maxPriceNum !== undefined) return price >= minPriceNum && price <= maxPriceNum;
+          if (minPriceNum !== undefined && maxPriceNum !== undefined)
+            return price >= minPriceNum && price <= maxPriceNum;
           if (minPriceNum !== undefined) return price >= minPriceNum;
           if (maxPriceNum !== undefined) return price <= maxPriceNum;
           return true;
@@ -224,7 +223,9 @@ export const getAllGymList = async (req, res) => {
 
     // Remove gyms with no plans only if price filter applied
     if (minPriceNum !== undefined || maxPriceNum !== undefined) {
-      gymsWithFullImages = gymsWithFullImages.filter(gym => gym.plans.length > 0);
+      gymsWithFullImages = gymsWithFullImages.filter(
+        (gym) => gym.plans.length > 0
+      );
     }
 
     // Pagination
@@ -244,36 +245,26 @@ export const getAllGymList = async (req, res) => {
         totalPages: Math.ceil(totalGyms / limitNumber),
       },
     });
-
   } catch (err) {
-    console.error("Error fetching gyms:", err.message);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
 
-
-
-
-
-
 export const getGymDetail = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(id,"gyguhj")
     if (!id) {
       return res
-      .status(400)
-      .json({ success: false, message: "Gym ID is required" });
+        .status(400)
+        .json({ success: false, message: "Gym ID is required" });
     }
-    
+
     const SERVER_URL = process.env.DOMAIN; // ✅ Yaha apna actual base URL likho
-    
+
     // ✅ Single gym fetch
     const gym = await Gym.findById(id).populate("user", "-password");
     if (!gym) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Gym not found" });
+      return res.status(404).json({ success: false, message: "Gym not found" });
     }
 
     // ✅ Gym plans lao
@@ -291,28 +282,18 @@ export const getGymDetail = async (req, res) => {
     // ✅ Final response
     const gymWithFullImages = {
       ...gym.toObject(),
-      logo: gym.logo
-        ? `${SERVER_URL}/${gym.logo}`
-        : null,
-      coverImage: gym.coverImage
-        ? `${SERVER_URL}/${gym.coverImage}`
-        : null,
-      owner_image: gym.owner_image
-        ? `${SERVER_URL}/${gym.owner_image}`
-        : null,
-      images: gym.images?.map(
-        (imgPath) => `${SERVER_URL}/${imgPath}`
-      ) || [],
+      logo: gym.logo ? `${SERVER_URL}/${gym.logo}` : null,
+      coverImage: gym.coverImage ? `${SERVER_URL}/${gym.coverImage}` : null,
+      owner_image: gym.owner_image ? `${SERVER_URL}/${gym.owner_image}` : null,
+      images: gym.images?.map((imgPath) => `${SERVER_URL}/${imgPath}`) || [],
       plans: gymPlans,
     };
 
     res.json({ success: true, data: gymWithFullImages });
   } catch (err) {
-    console.error("Error fetching gym:", err.message);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
-
 
 export const gymProfile = async (req, res) => {
   try {
@@ -320,25 +301,26 @@ export const gymProfile = async (req, res) => {
 
     if (!id) {
       return res
-      .status(400)
-      .json({ success: false, message: "Gym ID is required" });
+        .status(400)
+        .json({ success: false, message: "Gym ID is required" });
     }
-    
+
     const SERVER_URL = process.env.DOMAIN; // ✅ Yaha apna actual base URL likho
-    const user = await User.findById(id)
+    const user = await User.findById(id);
     // ✅ Single gym fetch
-    const gym = await Gym.findOne({user:user?.id}).select("-password").lean();
+
+    const gym = await Gym.findOne({ user: user?.id })
+      .select("-password")
+      .lean();
     const updatedData = {
       ...gym,
-       name: user?.name,
-  email: user?.email,
-  phone: user?.phone,
-    }
-    console.log(updatedData,"bm,nmn k")
+      name: user?.name,
+      email: user?.email,
+      phone: user?.phone,
+    };
+    console.log(updatedData, "bm,nmn k");
     if (!gym) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Gym not found" });
+      return res.status(404).json({ success: false, message: "Gym not found" });
     }
 
     // ✅ Gym plans lao
@@ -358,18 +340,11 @@ export const gymProfile = async (req, res) => {
     // ✅ Final response
     const gymWithFullImages = {
       ...updatedData,
-      logo: gym.logo
-        ? `${SERVER_URL}/${gym.logo}`
-        : null,
-      coverImage: gym.coverImage
-        ? `${SERVER_URL}/${gym.coverImage}`
-        : null,
-      images: gym.images?.map(
-        (imgPath) => `${SERVER_URL}/${imgPath}`
-      ) || [],
-      owner_image: gym.owner_image?.map(
-        (imgPath) => `${SERVER_URL}/${imgPath}`
-      ) || [],
+      logo: gym.logo ? `${SERVER_URL}/${gym.logo}` : null,
+      coverImage: gym.coverImage ? `${SERVER_URL}/${gym.coverImage}` : null,
+      images: gym.images?.map((imgPath) => `${SERVER_URL}/${imgPath}`) || [],
+      owner_image:
+        gym.owner_image?.map((imgPath) => `${SERVER_URL}/${imgPath}`) || [],
       plans: gymPlans,
     };
 
@@ -379,11 +354,6 @@ export const gymProfile = async (req, res) => {
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
-
-
-
-
-
 
 // PUT /gym/:id
 export const updateGym = async (req, res) => {
@@ -401,10 +371,12 @@ export const updateGym = async (req, res) => {
       if (req.files.owner_image) {
         updateData.owner_image = req.files.owner_image.map((file) => file.path);
       }
-       // gymCertificates (multiple)
-  if (req.files["gymCertificates"]) {
-    updateData.gymCertificates = req.files["gymCertificates"].map(file => file.path);
-  }
+      // gymCertificates (multiple)
+      if (req.files["gymCertificates"]) {
+        updateData.gymCertificates = req.files["gymCertificates"].map(
+          (file) => file.path
+        );
+      }
     }
 
     // ✅ If longitude & latitude sent, update location field
@@ -444,9 +416,3 @@ export const updateGym = async (req, res) => {
     res.status(500).json({ message: "Server Error" });
   }
 };
-
-
-
-
-
-

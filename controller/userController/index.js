@@ -3,7 +3,6 @@ import Attendance from "../../models/attendence.model.js";
 import Gym from "../../models/gym.model.js";
 import Member from "../../models/member.model.js";
 
-
 export const markAttendance = async (req, res) => {
   try {
     const { gymId } = req.body;
@@ -14,15 +13,19 @@ export const markAttendance = async (req, res) => {
     }
 
     // ✅ Fetch Member with currentGym
- const member = await Member.findOne({ user: memberId }).select("currentGym user");
-
+    const member = await Member.findOne({ user: memberId }).select(
+      "currentGym user"
+    );
 
     if (!member) {
       return res.status(404).json({ message: "Member not found" });
     }
 
     // ✅ Ensure the gym matches user's current gym
-    if (!member.currentGym || member.currentGym.toString() !== gymId.toString()) {
+    if (
+      !member.currentGym ||
+      member.currentGym.toString() !== gymId.toString()
+    ) {
       return res.status(403).json({
         message: "You can only mark attendance for your current gym.",
       });
@@ -44,7 +47,9 @@ export const markAttendance = async (req, res) => {
     });
 
     if (existingAttendance) {
-      return res.status(400).json({ message: "Attendance already marked for today" });
+      return res
+        .status(400)
+        .json({ message: "Attendance already marked for today" });
     }
 
     // ✅ Create attendance
@@ -59,9 +64,7 @@ export const markAttendance = async (req, res) => {
       message: "Attendance marked successfully",
       attendance,
     });
-
   } catch (error) {
-    console.error("Error marking attendance:", error.message);
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 };

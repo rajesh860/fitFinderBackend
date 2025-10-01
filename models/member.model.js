@@ -7,45 +7,55 @@ const EmergencyContactSchema = new mongoose.Schema({
   relation: String,
 });
 
-
 const CurrentMembershipSchema = new mongoose.Schema({
   gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
   plan: { type: mongoose.Schema.Types.ObjectId, ref: "Plan" },
   membership_start: { type: Date, default: Date.now },
   membership_end: { type: Date },
-  status: { type: String, enum: ["active", "expired"], default: "active" }
+  status: { type: String, enum: ["active", "expired"], default: "active" },
 });
-const MemberSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-address:{type: String, default: ""},
-  
- gender: { type: String, enum: ["Male", "Female", "Other","None"], default: "None" },
+const MemberSchema = new mongoose.Schema(
+  {
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    address: { type: String, default: "" },
 
-  dob: { type: String,default: "" },
-  photo: { type: String, default: "" },
+    gender: {
+      type: String,
+      enum: ["Male", "Female", "Other", "None"],
+      default: "None",
+    },
 
-  // gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
-  currentGym: CurrentMembershipSchema,
- gymHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: "GymHistory" }],
-  membership_start: { type: Date, default: Date.now },
-  membership_end: { type: Date },
-  fee_amount: Number,
-  fee_status: { type: String, enum: ["paid", "pending", "overdue"], default: "pending" },
+    dob: { type: String, default: "" },
+    photo: { type: String, default: "" },
 
-  blood_group: { 
-    type: String, 
-    enum: ['A+','A-','B+','B-','AB+','AB-','O+','O-',''], 
-    default: '' 
+    // gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
+    currentGym: CurrentMembershipSchema,
+    gymHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: "GymHistory" }],
+    membership_start: { type: Date, default: Date.now },
+    membership_end: { type: Date },
+    fee_amount: Number,
+    fee_status: {
+      type: String,
+      enum: ["paid", "pending", "overdue"],
+      default: "pending",
+    },
+
+    blood_group: {
+      type: String,
+      enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", ""],
+      default: "",
+    },
+    medical_conditions: [String],
+    injuries: [String],
+    fitness_goals: [String],
+
+    emergency_contacts: [EmergencyContactSchema],
+    referred_by: String,
+    occupation: String,
+    notes: String,
   },
-  medical_conditions: [String],
-  injuries: [String],
-  fitness_goals: [String],
-
-  emergency_contacts: [EmergencyContactSchema],
-  referred_by: String,
-  occupation: String,
-  notes: String,
-}, { timestamps: true });
+  { timestamps: true }
+);
 
 const Member = mongoose.model("Member", MemberSchema);
 export default Member;
