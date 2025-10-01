@@ -26,11 +26,13 @@ export const getUsers = async (req, res) => {
     const userId = req.user.id;
 
     // 1️⃣ Find the member profile of logged-in user
-    const memberProfile = await Member.findOne({ gym: userId });
+    const findUser = await Gym.findOne({ user: userId });
+    console.log(findUser,"findUser")
+    const memberProfile = await Member.findOne({ "currentGym.gym": findUser?._id }).populate("user", "name email phone").lean();
     if (!memberProfile || !memberProfile.currentGym?.gym) {
-      return res.status(404).json({
+      return res.status(200).json({
         success: false,
-        message: "Gym not found for this user",
+        message: "User Not Found",
         data: [],
       });
     }
@@ -393,6 +395,8 @@ export const approveGymBooking = async (req, res) => {
       membership_end: endDate,
       status: "active",
     };
+   // ✅ Mark fee as paid
+    member.fee_status = "paid";
 
     await member.save();
 
@@ -537,7 +541,7 @@ export const getProgressUserOfGym = async (req, res) => {
     const gymId = req.user.id; // or check authorization
     console.log(memberId,gymId,"memberId,gymId")
     const progress = await Progress.findOne({ member: memberId, gym: gymId }).select('-member').populate('gym' ,'name')
-    if (!progress) return res.status(404).json({ success: false, message: "Progress not found" });
+    if (!progress) return res.status(200).json({ success: false, message: "Progress not found" });
     res.json({ success: true, data: progress });
   } catch (err) {
     res.status(500).json({ success: false, message: "Server Error" });

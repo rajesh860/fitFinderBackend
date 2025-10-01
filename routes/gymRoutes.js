@@ -19,7 +19,8 @@ router.put(
   updateGym
 );
 
-router.get("/user/:id",authMiddleware, viewuserDetail);
+router.get("/users/:id",authMiddleware, viewuserDetail);
+
 router.get("/detail/:id",authMiddleware, getGymDetail);
 router.get("/profile",authMiddleware,  gymProfile);
 router.post("/get-enquiry/:status",authMiddleware,  getGymAdminGymEnquiries);

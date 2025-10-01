@@ -5,7 +5,7 @@ import gymRoutes from "./routes/gymRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
-import {cronSrevice, markAbsentCron } from "./controller/cronJobs.js"
+import {cronService, markAbsentCron } from "./controller/cronJobs.js"
 import "./env.js"; // MongoDB connection
 import path from "path";
 
@@ -24,7 +24,7 @@ app.use("/admin", adminRoutes);
 app.use("/gym", gymRoutes);
 app.use("/user", userRoutes);
 
-cronSrevice()
+cronService()
 markAbsentCron()
 // Health check
 app.get("/", (req, res) => {

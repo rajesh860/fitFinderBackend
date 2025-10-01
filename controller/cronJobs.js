@@ -3,60 +3,66 @@ import nodemailer from "nodemailer";
 import dayjs from "dayjs";
 import Member from "../models/member.model.js";
 import Attendance from "../models/attendence.model.js";
-// Mail transporter (Gmail / SMTP)
+
+// --- Mail transporter (Gmail / SMTP)
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER, // e.g. your@gmail.com
-    pass: process.env.EMAIL_PASS, // App password (not normal Gmail password)
+    user: process.env.EMAIL_USER, // your Gmail
+    pass: process.env.EMAIL_PASS, // app password
   },
 });
 
-// 🔔 Cron Job - Runs every day at 12:00 AM (server time)
-export  const cronSrevice =()=>{
-
+// -----------------------------
+// Membership Expiry Email Cron
+// -----------------------------
+export const cronService = () => {
   cron.schedule(
-   "0 0 * * *",
+    "0 0 * * *", // Every day at 12:00 AM IST
     async () => {
       try {
-        console.log("cron start")
-        console.log("🔍 Running daily membership expiry check...");
-  
-       const today = dayjs().startOf("day");
-const upcomingExpiryDate = today.add(3, "day").endOf("day");
-  
-        // Find members expiring in next 3 days
-   
+        console.log("🔔 Running daily membership expiry check...");
+
+        const today = dayjs().startOf("day");
+        const upcomingExpiryDate = today.add(3, "day").endOf("day");
+
+        // Find members whose membership expires in next 3 days
         const members = await Member.find({
           membership_end: {
             $lte: upcomingExpiryDate.toDate(),
             $gte: today.toDate(),
           },
-        });
+        }).populate("user");
+
         if (!members || members.length === 0) {
           console.log("✅ No memberships expiring soon.");
           return;
         }
-  
-        for (const user of members) {
+
+        for (const member of members) {
+          const email = member.user?.email;
+          const name = member.user?.name || "Member";
+
+          if (!email) continue;
+
           try {
             const mailOptions = {
               from: `"FitMe Gym" <${process.env.EMAIL_USER}>`,
-              to: user.email,
+              to: email,
               subject: "⏳ Your Gym Membership is Expiring Soon!",
-              text: `Hi ${user.first_name} ${user.last_name},
-  
-  Your membership will expire on ${dayjs(user.membership_end).format(
+              text: `Hi ${name},
+
+Your gym membership will expire on ${dayjs(member.membership_end).format(
                 "DD MMM YYYY"
               )}. Please renew to continue your fitness journey!
-  
-  - FitMe Team`,
+
+- FitMe Team`,
             };
-  
+
             await transporter.sendMail(mailOptions);
-            console.log(`📩 Reminder email sent to ${user.email}`);
+            console.log(`📩 Reminder email sent to ${email}`);
           } catch (mailErr) {
-            console.error(`❌ Failed to send email to ${user.email}:`, mailErr);
+            console.error(`❌ Failed to send email to ${email}:`, mailErr);
           }
         }
       } catch (error) {
@@ -64,46 +70,50 @@ const upcomingExpiryDate = today.add(3, "day").endOf("day");
       }
     },
     {
-      timezone: "Asia/Kolkata", // India time
+      timezone: "Asia/Kolkata",
     }
   );
-}
+};
 
-
-
-
-
-
+// -----------------------------
+// Daily Absent Marking Cron
+// -----------------------------
 export const markAbsentCron = () => {
-  // ✅ Every day at 11:59 PM
-  cron.schedule("59 23 * * *", async () => {
-    try {
-      const today = dayjs().startOf("day").toDate();
+  cron.schedule(
+    "59 23 * * *", // Every day at 11:59 PM IST
+    async () => {
+      try {
+        console.log("🔔 Running daily absent marking...");
 
-      // Get all members
-      const members = await Member.find({ status: "active" });
+        const today = dayjs().startOf("day").toDate();
 
-      for (const member of members) {
-        const exists = await Attendance.findOne({
-          member: member._id,
-          date: today,
-        });
+        const members = await Member.find().populate("user currentGym.gym");
 
-        if (!exists) {
-          // Mark absent
-          const absent = new Attendance({
+        for (const member of members) {
+          if (member.user?.status !== "active") continue;
+
+          const exists = await Attendance.findOne({
             member: member._id,
-            gym: member.gym,
             date: today,
-            status: "absent",
           });
-          await absent.save();
-        }
-      }
 
-      console.log("Absent marking cron job completed");
-    } catch (err) {
-      console.error("Error in absent cron job:", err.message);
+          if (!exists) {
+            await Attendance.create({
+              member: member._id,
+              gym: member.currentGym?.gym || null,
+              date: today,
+              status: "absent",
+            });
+          }
+        }
+
+        console.log("✅ Daily absent marking completed.");
+      } catch (err) {
+        console.error("❌ Error in absent cron job:", err.message);
+      }
+    },
+    {
+      timezone: "Asia/Kolkata",
     }
-  });
+  );
 };

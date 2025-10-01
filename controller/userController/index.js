@@ -33,7 +33,6 @@ export const markAttendance = async (req, res) => {
     if (!gym) {
       return res.status(404).json({ message: "Gym not found" });
     }
-console.log(member,"bhjnkm")
     // ✅ Prevent duplicate attendance for same day
     const todayStart = dayjs().startOf("day").toDate();
     const todayEnd = dayjs().endOf("day").toDate();

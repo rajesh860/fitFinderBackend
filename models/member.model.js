@@ -24,7 +24,7 @@ address:{type: String, default: ""},
   dob: { type: String,default: "" },
   photo: { type: String, default: "" },
 
-  gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
+  // gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
   currentGym: CurrentMembershipSchema,
  gymHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: "GymHistory" }],
   membership_start: { type: Date, default: Date.now },

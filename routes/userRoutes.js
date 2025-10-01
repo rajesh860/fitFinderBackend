@@ -31,4 +31,5 @@ router.post("/get-enquiry",authMiddleware, getUserGymEnquiry);
 router.post("/enquiry-cancelled/:enquiryId",authMiddleware, enquiryCancelled);
 router.post("/buy-plan", authMiddleware, buyPlan);
 router.put("/update-profile/:id", authMiddleware, uploadMiddleware(["photo"]), updateUserProfile);
+
 export default router;

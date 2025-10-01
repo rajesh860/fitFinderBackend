@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import fs from "fs";
 import { GymPlan, Plan } from "../models/planSchema.js";
 import User from "../models/user.model.js";
+import { sendGymApprovalEmail } from "../utils/emailService.js";
 
 export const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -35,11 +36,11 @@ export const upload = multer({ storage: storage });
 // GET /gym/pending
 export const getPending = async (req, res) => {
   try {
-    const gyms = await User.find({userRole:"gym", status: "pending" });
+    const gyms = await User.find({ userRole: "gym", status: "pending" }).select('-password');
    // Add base URL to images
 
 
-res.json(gyms);
+   res.json({data:gyms,status:200,success:true});
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server Error" });
@@ -50,8 +51,10 @@ res.json(gyms);
 export const approveGym = async (req, res) => {
   try {
     const { gym_id } = req.params;
-    const gym = await Gym.findByIdAndUpdate(gym_id, { status: "approved", updated_at: Date.now() }, { new: true });
-    res.json({ success: true, message: "Gym approved successfully", });
+    const gym = await User.findByIdAndUpdate(gym_id, { status: "active", updated_at: Date.now() }, { new: true });
+      // ✅ 2. Send Email Notification
+    await sendGymApprovalEmail(gym.email, gym.name);
+    res.json({ success: true, message: "Gym Activated successfully", });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server Error" });
@@ -91,20 +94,31 @@ export const getGymList = async (req, res) => {
   try {
     const { name } = req.query;
 
-    // Base filter
+    // ✅ Build gym filter
     let filter = {
-      status: { $in: ["approved", "suspended", "rejected"] },
+      status: { $in: ["approved", "pending", "rejected"] }, // from Gym model
     };
 
-    // ✅ If name is passed, add case-insensitive search
+    // ✅ If name is passed, search by gymName
     if (name) {
-      filter.name = { $regex: name, $options: "i" };
+      filter.gymName = { $regex: name, $options: "i" };
     }
 
-    // ✅ Get all gyms + all plans
-    const gymsPlan = await GymPlan.find();
-    const gyms = await Gym.find(filter).select("-password");
+    // ✅ Fetch all gyms with related user data
+    const gyms = await Gym.find(filter)
+      .populate({
+        path: "user",
+        match: { userRole: "gym", status: { $in: ["active", "pending"] } }, // optional
+        select: "-password",
+      })
+      .lean(); // makes mapping easier
 
+    console.log(gyms, "GYMS FOUND");
+
+    // ✅ Get all gym plans
+    const gymsPlan = await GymPlan.find().lean();
+
+    // ✅ Map gym data
     const gymsWithFullImages = gyms.map((gym) => {
       const fullImages = (gym.images || []).map(
         (img) => `${process.env.DOMAIN}/${img}`
@@ -114,24 +128,25 @@ export const getGymList = async (req, res) => {
         (img) => `${process.env.DOMAIN}/${img}`
       );
 
-      // ✅ Match gymId with plans
       const plans = gymsPlan.filter(
         (plan) => plan.gymId?.toString() === gym._id.toString()
       );
 
       return {
-        ...gym.toObject(),
+        ...gym,
         images: fullImages,
         coverImage,
-        plans, // ✅ add matched plans here
+        plans,
       };
     });
+
     res.json({ success: true, data: gymsWithFullImages });
   } catch (err) {
-    console.error("Error fetching gyms:", err.message);
+    console.error("Error fetching gyms:", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+
 
 
 
@@ -254,7 +269,7 @@ export const getGymDetail = async (req, res) => {
     const SERVER_URL = process.env.DOMAIN; // ✅ Yaha apna actual base URL likho
     
     // ✅ Single gym fetch
-    const gym = await Gym.findById(id).select("-password");
+    const gym = await Gym.findById(id).populate("user", "-password");
     if (!gym) {
       return res
         .status(404)
@@ -282,6 +297,9 @@ export const getGymDetail = async (req, res) => {
       coverImage: gym.coverImage
         ? `${SERVER_URL}/${gym.coverImage}`
         : null,
+      owner_image: gym.owner_image
+        ? `${SERVER_URL}/${gym.owner_image}`
+        : null,
       images: gym.images?.map(
         (imgPath) => `${SERVER_URL}/${imgPath}`
       ) || [],
@@ -294,6 +312,8 @@ export const getGymDetail = async (req, res) => {
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+
+
 export const gymProfile = async (req, res) => {
   try {
     const { id } = req.user;

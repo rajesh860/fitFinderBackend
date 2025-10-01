@@ -1,6 +1,7 @@
 import Member from "../../models/member.model.js";
 import Attendance from "../../models/attendence.model.js";
 import Progress from "../../models/progess.model.js";
+import { GymPlan } from "../../models/planSchema.js";
 
 export const viewuserDetail = async (req, res) => {
   try {
@@ -9,14 +10,23 @@ export const viewuserDetail = async (req, res) => {
     // Populate user, currentGym.plan and currentGym.gym
     const doc = await Member.findById(id)
       .populate("user", "name email phone userRole status createdAt updatedAt")
-      .populate("currentGym.plan", "name")
+      .populate("currentGym.plan", "name planPrice duration")
       .populate("currentGym.gym", "gymName location address phone") // add fields you want from Gym
       .lean();
 
     if (!doc) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
+    // Fetch GymPlan details if currentGym exists
+ let gymPlanData = null;
 
+    // ✅ If currentGym exists, find price & duration from GymPlan
+    if (doc.currentGym?.gym?._id && doc.currentGym?.plan?._id) {
+      gymPlanData = await GymPlan.findOne({
+        gymId: doc.currentGym.gym._id,
+        planId: doc.currentGym.plan._id
+      }).select("price durationInMonths");
+    }
     // Build flattened response
     const flattened = {
       id: doc._id,
@@ -37,7 +47,6 @@ export const viewuserDetail = async (req, res) => {
       gender: doc.gender || null,
       dob: doc.dob || null,
       photo: doc.photo ? `${process.env.DOMAIN}/${doc.photo}` : null,
-      fee_amount: doc.fee_amount ?? null,
       fee_status: doc.fee_status || null,
       blood_group: doc.blood_group || null,
       medical_conditions: doc.medical_conditions || [],
@@ -58,6 +67,7 @@ export const viewuserDetail = async (req, res) => {
             gymLocation: doc.currentGym.gym?.location || null,
             planId: doc.currentGym.plan?._id || null,
             planName: doc.currentGym.plan?.name || null,
+             planPrice: gymPlanData?.price || null, // ✅ now fetched from GymPlan || null,
             membership_start: doc.currentGym.membership_start || null,
             membership_end: doc.currentGym.membership_end || null,
             membership_status: doc.currentGym.status || null,

@@ -14,7 +14,7 @@ const GymSchema = new mongoose.Schema({
   images: [String],
   gymCertificates: [String],
 
-  status: { type: String, enum:["pending","rejected","approved"], default: "pending" },
+  // status: { type: String, enum:["pending","rejected","approved"], default: "pending" },
 
   location: {
     type: {
