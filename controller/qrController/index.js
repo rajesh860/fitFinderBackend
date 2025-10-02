@@ -51,7 +51,7 @@ export const scanGymQR = async (req, res) => {
 
     const parsed = JSON.parse(qrData);
 
-    if (parsed.secret !== (process.env.QR_SECRET || "fitme123"))
+    if (parsed.secret !== (process.env.QR_SECRET || "fitmeGym2025@Secure!"))
       return res.status(403).json({ success: false, message: "Invalid QR" });
 
     const gym = await Gym.findById(parsed.gymId);

@@ -127,7 +127,6 @@ export const findSignalUser = async (req, res) => {
 export const getUserAttendence = async (req, res) => {
   const { id } = req.user;
   const { gymId } = req.params;
-  console.log(gymId);
 
   try {
     const attendance = await Attendance.find({
