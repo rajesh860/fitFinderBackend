@@ -2,24 +2,19 @@ import User from "../../models/user.model.js";
 import Admin from "../../models/admin.model.js";
 import Gym from "../../models/gym.model.js";
 import Member from "../../models/member.model.js";
-import {generateOtp, sendOtpEmail} from "../otpService.js"
-
-
-
+import { generateOtp, sendOtpEmail } from "../otpService.js";
 
 export const requestOtp = async (req, res) => {
   try {
     const { name, email, phone, password, userRole } = req.body;
 
-    console.log(req.body, "Incoming OTP Request");
-
     // 🔒 Admin check: only one admin allowed
     if (userRole === "admin") {
       const adminExist = await User.findOne({ userRole: "admin" });
       if (adminExist) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "Admin account already exists. Cannot create another." 
+        return res.status(400).json({
+          success: false,
+          message: "Admin account already exists. Cannot create another.",
         });
       }
     }
@@ -27,7 +22,9 @@ export const requestOtp = async (req, res) => {
     // 🔍 Email existence check (for gym, member, admin)
     const exist = await User.findOne({ email });
     if (exist) {
-      return res.status(400).json({ success: false, message: "Email already registered" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Email already registered" });
     }
 
     // 🔢 Generate OTP
@@ -36,28 +33,30 @@ export const requestOtp = async (req, res) => {
 
     // 🧠 Store OTP and user data in temporary memory
     req.app.locals.tempOtpStore = req.app.locals.tempOtpStore || {};
-    req.app.locals.tempOtpStore[email] = { name, email, phone, password, userRole, otp, expiry };
+    req.app.locals.tempOtpStore[email] = {
+      name,
+      email,
+      phone,
+      password,
+      userRole,
+      otp,
+      expiry,
+    };
 
     // ✉️ Send OTP email
     await sendOtpEmail(email, otp);
 
     // ✅ Send response with OTP expiry info
-    return res.json({ 
-      success: true, 
-      message: "OTP sent to email. Valid for 5 minutes.", 
-      otpExpiry: expiry 
+    return res.json({
+      success: true,
+      message: "OTP sent to email. Valid for 5 minutes.",
+      otpExpiry: expiry,
     });
-
   } catch (err) {
     console.log(err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
-
-
-
-
 
 export const verifyOtp = async (req, res) => {
   try {
@@ -65,7 +64,9 @@ export const verifyOtp = async (req, res) => {
     const tempUser = req.app.locals.tempOtpStore?.[email];
 
     if (!tempUser) {
-      return res.status(400).json({ success: false, message: "No OTP request found" });
+      return res
+        .status(400)
+        .json({ success: false, message: "No OTP request found" });
     }
 
     if (tempUser.expiry < Date.now()) {
@@ -120,11 +121,8 @@ export const verifyOtp = async (req, res) => {
       success: true,
       message: "Registration successful",
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
-

@@ -17,13 +17,6 @@ import { buyPlan } from "../controller/plan/plan.js";
 import { markAttendance } from "../controller/userController/index.js";
 const router = express.Router();
 
-// User registration
-// router.post(
-//   "/register",
-//   // uploadMiddleware(["photo", "id_proof"]), // dono field allowed
-//   UserRegister
-// );
-
 //gym apply
 router.post("/gym-apply/:gymId", authMiddleware, gymApply);
 

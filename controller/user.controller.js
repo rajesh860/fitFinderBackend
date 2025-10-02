@@ -225,7 +225,7 @@ export const updateUserProfile = async (req, res) => {
     });
 
     // ✅ Fetch current user
-    const getUser = await Member.findOne({ user: memberId });
+    const getUser = await Member.findOne({ id: memberId });
     console.log(getUser, memberId, "getUser");
     // console.log(getUser,memberId,"getUser")
     if (!getUser) {
