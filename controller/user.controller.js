@@ -237,13 +237,13 @@ export const updateUserProfile = async (req, res) => {
     // ✅ If new photo uploaded
     if (req.file) {
       // 🔥 Delete old photo if exists
-      if (getUser.photo) {
-        const oldPhotoPath = path.join(process.cwd(), getUser.photo); // resolve full path
-        if (fs.existsSync(oldPhotoPath)) {
-          fs.unlinkSync(oldPhotoPath);
-          console.log("Old photo deleted:", oldPhotoPath);
-        }
-      }
+      // if (getUser.photo) {
+      //   const oldPhotoPath = path.join(process.cwd(), getUser.photo); // resolve full path
+      //   if (fs.existsSync(oldPhotoPath)) {
+      //     fs.unlinkSync(oldPhotoPath);
+      //     console.log("Old photo deleted:", oldPhotoPath);
+      //   }
+      // }
       // ✅ Set new photo path
       updateData.photo = req.file.path;
     }
