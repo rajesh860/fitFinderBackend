@@ -15,32 +15,38 @@ export const viewuserDetail = async (req, res) => {
       .lean();
 
     if (!doc) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
     // Fetch GymPlan details if currentGym exists
- let gymPlanData = null;
+    let gymPlanData = null;
 
+    const getAttendance = await Attendance.find({
+      member: id,
+      gym: doc?.currentGym?.gym?._id,
+    });
+    console.log(getAttendance, doc);
     // ✅ If currentGym exists, find price & duration from GymPlan
     if (doc.currentGym?.gym?._id && doc.currentGym?.plan?._id) {
       gymPlanData = await GymPlan.findOne({
         gymId: doc.currentGym.gym._id,
-        planId: doc.currentGym.plan._id
+        planId: doc.currentGym.plan._id,
       }).select("price durationInMonths");
     }
     // Build flattened response
     const flattened = {
       id: doc._id,
       // Top-level user fields (flattened)
-      
-        // id: doc.user?._id || null,
-        name: doc.user?.name || null,
-        email: doc.user?.email || null,
-        phone: doc.user?.phone || null,
-        role: doc.user?.userRole || null,
-        status: doc.user?.status || null,
-        createdAt: doc.user?.createdAt || null,
-        updatedAt: doc.user?.updatedAt || null,
-   
+
+      // id: doc.user?._id || null,
+      name: doc.user?.name || null,
+      email: doc.user?.email || null,
+      phone: doc.user?.phone || null,
+      role: doc.user?.userRole || null,
+      status: doc.user?.status || null,
+      createdAt: doc.user?.createdAt || null,
+      updatedAt: doc.user?.updatedAt || null,
 
       // Member-specific fields
       address: doc.address || null,
@@ -62,12 +68,13 @@ export const viewuserDetail = async (req, res) => {
       // Current membership (flattened)
       currentMembership: doc.currentGym
         ? {
+            attendance: getAttendance,
             gymId: doc.currentGym.gym?._id || null,
             gymName: doc.currentGym.gym?.gymName || (doc.gym ? doc.gym : null),
             gymLocation: doc.currentGym.gym?.location || null,
             planId: doc.currentGym.plan?._id || null,
             planName: doc.currentGym.plan?.name || null,
-             planPrice: gymPlanData?.price || null, // ✅ now fetched from GymPlan || null,
+            planPrice: gymPlanData?.price || null, // ✅ now fetched from GymPlan || null,
             membership_start: doc.currentGym.membership_start || null,
             membership_end: doc.currentGym.membership_end || null,
             membership_status: doc.currentGym.status || null,
@@ -84,16 +91,11 @@ export const viewuserDetail = async (req, res) => {
     return res.json({ success: true, user: flattened });
   } catch (error) {
     console.error("Error in viewuserDetail:", error);
-    return res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    return res
+      .status(500)
+      .json({ success: false, message: "Server Error", error: error.message });
   }
 };
-
-
-
-
-
-
-
 
 // export const getAttendance = async (req, res) => {
 //   try {

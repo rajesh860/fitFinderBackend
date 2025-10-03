@@ -129,8 +129,9 @@ export const getUserAttendence = async (req, res) => {
   const { gymId } = req.params;
 
   try {
+    const getMember = await Member.findOne({ user: id });
     const attendance = await Attendance.find({
-      member: id,
+      member: getMember?._id,
       gym: gymId,
       // date: { $gte: todayStart, $lte: todayEnd },
     })

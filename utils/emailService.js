@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 export async function sendGymApprovalEmail(toEmail, userName) {
   try {
-    console
+    console;
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -27,7 +27,7 @@ export async function sendGymApprovalEmail(toEmail, userName) {
             </p>
 
             <div style="text-align: center; margin-top: 30px;">
-              <a href="https://yourappdomain.com/login" 
+              <a href="http://13.60.166.240/login" 
                  style="background: #FF8C32; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold;">
                 Go to Dashboard
               </a>
@@ -46,9 +46,10 @@ export async function sendGymApprovalEmail(toEmail, userName) {
     `;
 
     await transporter.sendMail({
-       headers: {
-    "List-Unsubscribe": "<mailto:support@fitfinder.com>, <https://yourappdomain.com/unsubscribe>",
-  },
+      headers: {
+        "List-Unsubscribe":
+          "<mailto:support@fitfinder.com>, <https://yourappdomain.com/unsubscribe>",
+      },
       from: `"FitFinder" <${process.env.GMAIL_USER}>`,
       to: toEmail,
       subject: "Your Gym Has Been Approved 🎉",

@@ -6,8 +6,8 @@ import { generateOtp, sendOtpEmail } from "../otpService.js";
 
 export const requestOtp = async (req, res) => {
   try {
-    const { name, email, phone, password, userRole } = req.body;
-
+    const { name, email, phone, password, userRole, gymName } = req.body;
+    console.log(gymName);
     // 🔒 Admin check: only one admin allowed
     if (userRole === "admin") {
       const adminExist = await User.findOne({ userRole: "admin" });
@@ -41,6 +41,7 @@ export const requestOtp = async (req, res) => {
       userRole,
       otp,
       expiry,
+      gymName, // 👈 store gymName also
     };
 
     // ✉️ Send OTP email
@@ -97,7 +98,7 @@ export const verifyOtp = async (req, res) => {
 
     // 🧩 Role-based profile creation
     if (tempUser.userRole === "gym") {
-      await new Gym({ user: user._id }).save();
+      await new Gym({ user: user._id, gymName: tempUser.gymName }).save(); // 👈
     } else if (tempUser.userRole === "member") {
       await new Member({ user: user._id }).save();
     } else if (tempUser.userRole === "admin") {
@@ -111,6 +112,7 @@ export const verifyOtp = async (req, res) => {
     if (tempUser.userRole === "gym") {
       return res.json({
         success: true,
+        userRole: "gym",
         message:
           "Your registration request has been submitted successfully. Your account will be activated within 4 hours as per our rules and guidelines.",
       });

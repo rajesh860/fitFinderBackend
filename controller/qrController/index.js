@@ -43,7 +43,7 @@ export const scanGymQR = async (req, res) => {
   try {
     const { qrData } = req.body; // QR se JSON milega
     const userId = req.user?.id; // Logged in user
-    console.log(qrData, userId);
+
     if (!qrData)
       return res
         .status(400)
@@ -68,7 +68,7 @@ export const scanGymQR = async (req, res) => {
         .json({ success: false, message: "You are not a member of this gym" });
 
     const today = dayjs().startOf("day").toDate();
-
+    console.log(qrData, userId, member, "marked");
     const existing = await Attendance.findOne({
       member: member._id,
       gym: gym._id,
