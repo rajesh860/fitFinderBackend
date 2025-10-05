@@ -9,15 +9,15 @@ export const requestOtp = async (req, res) => {
   try {
     const { name, email, phone, password, userRole, gymName } = req.body;
     // 🔒 Admin check: only one admin allowed
-    if (userRole === "admin") {
-      const adminExist = await User.findOne({ userRole: "admin" });
-      if (adminExist) {
-        return res.status(400).json({
-          success: false,
-          message: "Admin account already exists. Cannot create another.",
-        });
-      }
-    }
+    // if (userRole === "admin") {
+    //   const adminExist = await User.findOne({ userRole: "admin" });
+    //   if (adminExist) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: "Admin account already exists. Cannot create another.",
+    //     });
+    //   }
+    // }
 
     // 🔍 Email existence check (for gym, member, admin)
     const exist = await User.findOne({ email });
