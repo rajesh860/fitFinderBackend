@@ -148,6 +148,44 @@ export const getUserAttendence = async (req, res) => {
   }
 };
 
+
+export const getUserProgressByGym = async (req, res) => {
+  try {
+    // ✅ Find member linked to logged-in user
+    const member = await Member.findOne({ user: req.user.id });
+    if (!member)
+      return res.status(404).json({ success: false, message: "Member not found" });
+
+    const memberId = member._id;
+    const { gymId } = req.params;
+
+  
+
+    // ✅ Fetch progress
+    const progress = await Progress.findOne({ member: memberId, gym: gymId })
+      .populate("gym", "gymName location")
+      .populate("current.updatedBy", "name")
+      .populate("history.updatedBy", "name")
+      .lean();
+
+    if (!progress)
+      return res.status(404).json({ success: false, message: "No progress found for this gym" });
+
+    res.json({
+      success: true,
+      data: {
+        current: progress.current,
+        history: progress.history,
+        gym: progress.gym,
+      },
+    });
+  } catch (error) {
+    console.error("❌ getUserProgressByGym error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+
 export const getUserGymHistory = async (req, res) => {
   try {
     const memberId = req.user?.id;
@@ -276,19 +314,18 @@ export const gymApply = async (req, res) => {
   try {
     const { gymId } = req.params;
     const memberId = req.user?.id;
-
     // 1️⃣ Check if gym exists
     const gym = await Gym.findById(gymId);
     if (!gym) {
       return res.status(404).json({ success: false, message: "Gym not found" });
     }
-
+    
     // 2️⃣ Fetch the member
     const member = await Member.findOne({ user: memberId });
     if (!member) {
       return res
-        .status(404)
-        .json({ success: false, message: "Member not found" });
+      .status(404)
+      .json({ success: false, message: "Member not found" });
     }
 
     // 3️⃣ Prevent duplicate gym application
@@ -528,46 +565,60 @@ export const getGymBookingRequests = async (req, res) => {
 
 export const addProgressUserByGym = async (req, res) => {
   try {
-    const { memberId } = req.params;
-
-    const gymId = req.user.id; // assuming gym owner/trainer is logged in
+    const { memberId } = req.params; // Member ID
+    const gymOwnerId = req.user.id; // Logged-in gym owner/trainer
     const { weight, height, arm, waist, thigh, chest, bloodGroup } = req.body;
 
-    let progress = await Progress.findOne({ member: memberId, gym: gymId });
+    // ✅ Step 1: Find the gym of this owner
+    const gym = await Gym.findOne({ user: gymOwnerId });
+    if (!gym) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Gym not found for this owner" });
+    }
+
+    // ✅ Step 2: Find or create progress document
+    let progress = await Progress.findOne({ member: memberId, gym: gym._id });
+
     if (!progress) {
+      // Create new progress
       progress = new Progress({
         member: memberId,
-        gym: gymId,
+        gym: gym._id,
         current: {
-          chest,
           weight,
           height,
           arm,
           waist,
           thigh,
+          chest,
           bloodGroup,
-          updatedBy: req.user.id,
+          updatedBy: gymOwnerId,
         },
       });
     } else {
       // Push old current to history
       progress.history.push({ ...progress.current });
+
       // Update current
       progress.current = {
         weight,
-        chest,
         height,
         arm,
         waist,
         thigh,
+        chest,
         bloodGroup,
-        updatedBy: gymId,
+        updatedBy: gymOwnerId,
+        updatedAt: Date.now(),
       };
     }
 
     await progress.save();
-    res.json({ success: true, message: "Progress Added Successfully" });
+
+    res.json({ success: true, message: "Progress added/updated successfully" });
   } catch (err) {
+    console.error("❌ addProgressUserByGym error:", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
@@ -666,7 +717,7 @@ export const userGymEnquiry = async (req, res) => {
 export const getUserGymEnquiry = async (req, res) => {
   try {
     const { id: userId } = req.user; // Get logged-in user's ID from auth middleware
-
+console.log(userId)
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
@@ -674,9 +725,8 @@ export const getUserGymEnquiry = async (req, res) => {
     // Fetch all enquiries for this user
     const enquiries = await Enquiry.find({ userId }).populate(
       "gymId",
-      "name address"
+      "gymName address"
     );
-
     res.status(200).json({
       success: true,
       enquiries,
@@ -693,7 +743,7 @@ export const getGymAdminGymEnquiries = async (req, res) => {
     const { id } = req.user; // Gym admin's user ID
 
     // 1️⃣ Find the gym managed by this admin
-    const gym = await Gym.find({ user: id }); // Assuming gym has email field
+    const gym = await Gym.findOne({ user: id }); // Assuming gym has email field
     if (!gym) {
       return res
         .status(404)
@@ -707,8 +757,9 @@ export const getGymAdminGymEnquiries = async (req, res) => {
       status: { $in: statusArray },
     }).populate(
       "userId",
-      "first_name last_name email phone gender dob address"
+      "name email phone gender dob address"
     );
+    console.log(enquiries,gym,"enquiries")
     res.status(200).json({
       success: true,
       data: enquiries,

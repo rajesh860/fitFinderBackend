@@ -8,7 +8,7 @@ const MeasurementHistorySchema = new mongoose.Schema({
   thigh: Number,
   chest: Number,
   bloodGroup: String,
-  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "GymOwner" },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
   updatedAt: { type: Date, default: Date.now },
 });
 
@@ -28,7 +28,7 @@ const ProgressSchema = new mongoose.Schema({
     thigh: Number,
     chest: Number,
     bloodGroup: String,
-    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "GymOwner" },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
     updatedAt: { type: Date, default: Date.now },
   },
 

@@ -76,18 +76,40 @@ export const rejectGym = async (req, res) => {
 export const suspendGym = async (req, res) => {
   try {
     const { gym_id } = req.params;
-    const { status } = req.body;
-    const { reason } = req.body;
-    const gym = await Gym.findByIdAndUpdate(
-      gym_id,
-      { status: status, updated_at: Date.now() },
-      { new: true }
-    );
-    res.json({ success: true, message: `Gym ${status} successfully` });
+    const { status, reason } = req.body;
+
+    // 🧩 Step 1: Gym find karo
+    const gym = await Gym.findById(gym_id);
+
+    if (!gym) {
+      return res.status(404).json({ success: false, message: "Gym not found" });
+    }
+
+    // 🧩 Step 2: Gym status update karo
+    gym.status = status;
+    gym.updated_at = Date.now();
+    if (reason) gym.reason = reason;
+    await gym.save();
+
+    // 🧩 Step 3: Linked User status update karo
+    if (gym.user) {
+      await User.findByIdAndUpdate(
+        gym.user,
+        { status },
+        { new: true }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Gym and user ${status} successfully`,
+    });
   } catch (err) {
+    console.error("❌ suspendGym error:", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+
 
 // GET /gym/list
 
@@ -95,30 +117,32 @@ export const getGymList = async (req, res) => {
   try {
     const { name } = req.query;
 
-    // ✅ Build gym filter
-    let filter = {
-      status: { $in: ["approved", "pending", "rejected"] }, // from Gym model
-    };
-
-    // ✅ If name is passed, search by gymName
+    // Base filter (optional, Gym status filter)
+    let filter = {};
     if (name) {
       filter.gymName = { $regex: name, $options: "i" };
     }
 
-    // ✅ Fetch all gyms with related user data
+    // Fetch gyms and populate only active/inactive users
     const gyms = await Gym.find(filter)
       .populate({
         path: "user",
-        match: { userRole: "gym", status: { $in: ["active", "pending"] } }, // optional
+        match: { 
+          userRole: "gym", 
+          status: { $in: ["active", "inactive"] } 
+        },
         select: "-password",
       })
-      .lean(); // makes mapping easier
+      .lean();
 
-    // ✅ Get all gym plans
+    // Remove gyms whose user is null (user not active/inactive)
+    const filteredGyms = gyms.filter((gym) => gym.user);
+
+    // Fetch all gym plans
     const gymsPlan = await GymPlan.find().lean();
 
-    // ✅ Map gym data
-    const gymsWithFullImages = gyms.map((gym) => {
+    // Map gyms with full image URLs and plans
+    const gymsWithFullImages = filteredGyms.map((gym) => {
       const fullImages = (gym.images || []).map(
         (img) => `${process.env.DOMAIN}/${img}`
       );
@@ -141,9 +165,12 @@ export const getGymList = async (req, res) => {
 
     res.json({ success: true, data: gymsWithFullImages });
   } catch (err) {
+    console.error("❌ getGymList error:", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+
+
 
 export const getAllGymList = async (req, res) => {
   try {

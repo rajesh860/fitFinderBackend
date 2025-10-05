@@ -6,6 +6,7 @@ import {
   getUserAttendence,
   getUserGymEnquiry,
   getUserGymHistory,
+  getUserProgressByGym,
   getUsers,
   gymApply,
   updateUserProfile,
@@ -24,6 +25,7 @@ router.post("/gym-apply/:gymId", authMiddleware, gymApply);
 ///attendence
 // router.post("/attendence-mark", authMiddleware, markAttendance);
 router.get("/get-attendence/:gymId", authMiddleware, getUserAttendence);
+router.get("/get-progress/:gymId", authMiddleware, getUserProgressByGym);
 
 router.get("/get-gym-history", authMiddleware, getUserGymHistory);
 

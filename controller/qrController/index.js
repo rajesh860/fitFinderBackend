@@ -64,11 +64,10 @@ export const scanGymQR = async (req, res) => {
     });
     if (!member)
       return res
-        .status(403)
+        .status(400)
         .json({ success: false, message: "You are not a member of this gym" });
 
     const today = dayjs().startOf("day").toDate();
-    console.log(qrData, userId, member, "marked");
     const existing = await Attendance.findOne({
       member: member._id,
       gym: gym._id,

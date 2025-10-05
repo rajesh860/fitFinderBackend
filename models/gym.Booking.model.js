@@ -23,7 +23,7 @@ const EnquirySchema = new mongoose.Schema({
   },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Member",
+    ref: "User",
     required: true
   },
   
