@@ -10,6 +10,7 @@ import User from "../models/user.model.js";
 import Attendance from "../models/attendence.model.js";
 import { GymHistory } from "../models/gymHistory.model.js";
 import GymBooking from "../models/gymBooking.model.js";
+import mongoose from "mongoose";
 dotenv.config(); // load env variables
 
 // Example controller function
@@ -22,7 +23,6 @@ export const getUsers = async (req, res) => {
 
     // 1️⃣ Find the member profile of logged-in user
     const findUser = await Gym.findOne({ user: userId });
-    console.log(findUser, "findUser");
     const memberProfile = await Member.findOne({
       "currentGym.gym": findUser?._id,
     })
@@ -129,16 +129,20 @@ export const getUserAttendence = async (req, res) => {
   const { gymId } = req.params;
 
   try {
-    const getMember = await Member.findOne({ user: id });
+    const getMember = await Member.findOne({ user: id }).populate("user", "name photo");
+    const user={
+      userPhoto:`${process.env.DOMAIN}/${getMember.photo}`,
+  name:getMember.user?.name || ""
+}
     const attendance = await Attendance.find({
       member: getMember?._id,
       gym: gymId,
       // date: { $gte: todayStart, $lte: todayEnd },
     })
-      .populate("gym", "gymName") // Gym ka naam bhi populate kar sakte ho
-      .sort({ date: -1 })
-      .lean();
-    res.json({ data: attendance, status: true });
+    .populate("gym", "gymName") // Gym ka naam bhi populate kar sakte ho
+    .sort({ date: -1 })
+    .lean();
+    res.json({ data: attendance, status: true,user});
   } catch (error) {
     res.status(500).json({ message: "Server Error", error: error.message });
   }
@@ -226,7 +230,6 @@ export const updateUserProfile = async (req, res) => {
 
     // ✅ Fetch current user
     const getUser = await Member.findOne({ _id: memberId });
-    console.log(getUser, memberId, "getUser");
     // console.log(getUser,memberId,"getUser")
     if (!getUser) {
       return res
@@ -247,8 +250,11 @@ export const updateUserProfile = async (req, res) => {
       // ✅ Set new photo path
       updateData.photo = req.file.path;
     }
-    console.log(updateData, "bjnkm");
     // ✅ Update user
+    if (updateData.phone) {
+  await User.findByIdAndUpdate(getUser.user, { phone: updateData.phone });
+  delete updateData.phone;
+}
     const updatedMember = await Member.findByIdAndUpdate(
       getUser?._id,
       { $set: updateData },
@@ -270,7 +276,6 @@ export const gymApply = async (req, res) => {
   try {
     const { gymId } = req.params;
     const memberId = req.user?.id;
-    console.log(gymId, memberId);
 
     // 1️⃣ Check if gym exists
     const gym = await Gym.findById(gymId);
@@ -333,11 +338,10 @@ export const approveGymBooking = async (req, res) => {
   try {
     const { requestId } = req.params;
     const ownerId = req.user?.id;
-    const { planId } = req.body; // frontend se planId aa rahi hai
+    const { planId } = req.body; // frontend se aa raha hai
 
-    console.log("🔹 Params:", { requestId, ownerId, planId });
 
-    // 1️⃣ Fetch owner's gym
+    // 1️⃣ Fetch owner’s gym
     const ownerGym = await Gym.findOne({ user: ownerId });
     if (!ownerGym) {
       return res
@@ -345,7 +349,7 @@ export const approveGymBooking = async (req, res) => {
         .json({ success: false, message: "Gym not found for this owner" });
     }
 
-    // 2️⃣ Fetch specific booking request
+    // 2️⃣ Fetch booking request
     const request = await GymBooking.findById(requestId).populate("user gym");
     if (!request) {
       return res
@@ -353,7 +357,7 @@ export const approveGymBooking = async (req, res) => {
         .json({ success: false, message: "Booking request not found" });
     }
 
-    // 3️⃣ Authorization check
+    // 3️⃣ Check owner authorization
     if (request.gym.user.toString() !== ownerId.toString()) {
       return res.status(403).json({
         success: false,
@@ -361,7 +365,7 @@ export const approveGymBooking = async (req, res) => {
       });
     }
 
-    // 4️⃣ Fetch member
+    // 4️⃣ Find member
     const member = await Member.findOne({ user: request.user._id });
     if (!member) {
       return res
@@ -369,11 +373,14 @@ export const approveGymBooking = async (req, res) => {
         .json({ success: false, message: "Member not found for this user" });
     }
 
-    // 5️⃣ Verify GymPlan
+    // 5️⃣ Validate planId aur gymPlan fetch
+    
+
     const gymPlan = await GymPlan.findOne({
       gymId: request.gym._id,
-      planId,
+      _id:planId,
     }).populate("planId", "name durationInMonths");
+    console.log(gymPlan,"gymPlan")
     if (!gymPlan) {
       return res.status(400).json({
         success: false,
@@ -381,7 +388,7 @@ export const approveGymBooking = async (req, res) => {
       });
     }
 
-    // 6️⃣ Move current gym to history if exists
+    // 6️⃣ Agar member ke paas already koi active gym hai → usko history me daalo
     if (member.currentGym?.gym) {
       const history = await GymHistory.create({
         member: member._id,
@@ -395,8 +402,9 @@ export const approveGymBooking = async (req, res) => {
     }
 
     // 7️⃣ Set new membership start and end dates
-    const startDate = new Date(); // Today = approval date
-    const durationMonths = parseInt(gymPlan.durationInMonths, 10) || 1;
+    const startDate = new Date();
+    const durationMonths =
+      parseInt(gymPlan.durationInMonths, 10) || 1;
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + durationMonths);
 
@@ -407,16 +415,16 @@ export const approveGymBooking = async (req, res) => {
       membership_end: endDate,
       status: "active",
     };
-    // ✅ Mark fee as paid
-    member.fee_status = "paid";
 
+    // 8️⃣ Mark fee as paid
+    member.fee_status = "paid";
     await member.save();
 
-    // 8️⃣ Delete booking request after approval
+    // 9️⃣ Delete approved booking
     await GymBooking.findByIdAndDelete(requestId);
 
-    // ✅ Final response
-    res.json({
+    // 🔟 Success response
+    return res.json({
       success: true,
       message: `✅ Booking approved successfully with ${
         gymPlan.planId.name || "selected"
@@ -425,12 +433,13 @@ export const approveGymBooking = async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Error in approveGymBooking:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Server Error", error: err.message });
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: err.message,
+    });
   }
 };
-
 export const rejectGymBooking = async (req, res) => {
   try {
     const { requestId } = req.params;

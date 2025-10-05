@@ -78,38 +78,65 @@ Your gym membership will expire on ${dayjs(member.membership_end).format(
 // -----------------------------
 // Daily Absent Marking Cron
 // -----------------------------
+
+
 export const markAbsentCron = () => {
   cron.schedule(
-    "59 23 * * *", // Every day at 11:59 PM IST
+    "59 23 * * *", // Runs daily at 11:59 PM
     async () => {
-      try {
-        console.log("🔔 Running daily absent marking...");
+      console.log("🔔 Running daily absent marking...");
 
+      try {
         const today = dayjs().startOf("day").toDate();
 
-        const members = await Member.find().populate("user currentGym.gym");
+        // 1️⃣ Get all active members only
+        const members = await Member.find({ "user.status": "active" })
+          .populate("user")
+          .populate("currentGym.gym");
 
-        for (const member of members) {
-          if (member.user?.status !== "active") continue;
+        if (!members.length) {
+          console.log("⚠️ No active members found.");
+          return;
+        }
 
-          const exists = await Attendance.findOne({
-            member: member._id,
-            date: today,
-          });
+        // 2️⃣ Get all attendance records for today
+        const todayAttendances = await Attendance.find({
+          date: today,
+        }).select("member");
 
-          if (!exists) {
-            await Attendance.create({
+        const attendedMemberIds = new Set(
+          todayAttendances.map((a) => a.member.toString())
+        );
+
+        // 3️⃣ Filter members who don’t have attendance
+        const absentMembers = members.filter(
+          (m) => !attendedMemberIds.has(m._id.toString())
+        );
+
+        if (!absentMembers.length) {
+          console.log("✅ All members marked today. No absentees.");
+          return;
+        }
+
+        // 4️⃣ Prepare bulk insert
+        const absentRecords = absentMembers.map((member) => ({
+          insertOne: {
+            document: {
               member: member._id,
               gym: member.currentGym?.gym || null,
               date: today,
               status: "absent",
-            });
-          }
-        }
+              createdAt: new Date(),
+            },
+          },
+        }));
 
-        console.log("✅ Daily absent marking completed.");
+        // 5️⃣ Bulk insert for performance
+        await Attendance.bulkWrite(absentRecords);
+
+        console.log(`✅ Marked ${absentRecords.length} members as absent.`);
       } catch (err) {
-        console.error("❌ Error in absent cron job:", err.message);
+        console.error("❌ Error in absent cron job:", err);
       }
     },
     {
@@ -117,3 +144,4 @@ export const markAbsentCron = () => {
     }
   );
 };
+

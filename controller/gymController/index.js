@@ -26,7 +26,6 @@ export const viewuserDetail = async (req, res) => {
       member: id,
       gym: doc?.currentGym?.gym?._id,
     });
-    console.log(getAttendance, doc);
     // ✅ If currentGym exists, find price & duration from GymPlan
     if (doc.currentGym?.gym?._id && doc.currentGym?.plan?._id) {
       gymPlanData = await GymPlan.findOne({

@@ -45,6 +45,7 @@ router.post("/generate/qr", authMiddleware, generateGymQR);
 router.get("/users/:id", authMiddleware, viewuserDetail);
 
 router.get("/detail/:id", authMiddleware, getGymDetail);
+
 router.get("/profile", authMiddleware, gymProfile);
 router.post("/get-enquiry/:status", authMiddleware, getGymAdminGymEnquiries);
 router.put("/cancel/enquiry/:id", authMiddleware, cancelEnquiryByAdmin);

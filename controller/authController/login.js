@@ -1,5 +1,4 @@
 import jwt from "jsonwebtoken";
-// import bcrypt from "bcryptjs";
 import User from "../../models/user.model.js";
 
 export const login = async (req, res) => {
@@ -14,7 +13,10 @@ export const login = async (req, res) => {
     if (!user) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
-
+  // ✅ Plain password check
+    if (user.password !== password) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
   
     // generate token
     const token = jwt.sign(
@@ -34,7 +36,7 @@ export const login = async (req, res) => {
         userId: user._id,
         name: user.name,
         email: user.email,
-        userRole: user.userRole
+        userRole: user.userRole,
       }
     });
   } catch (error) {
@@ -52,11 +54,16 @@ export const adminLogin = async (req, res) => {
     // find user in User collection
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(400).json({ message: "Invalid email or password" });
     }
  if(user.userRole === 'member'){
   return res.status(403).json({ message: "Access denied. Not an admin user." });
 }
+
+  // ✅ Plain password check
+    if (user.password !== password) {
+      return res.status(400).json({ message: "Invalid email or password" });
+    }
 
    
 

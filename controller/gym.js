@@ -7,6 +7,7 @@ import fs from "fs";
 import { GymPlan, Plan } from "../models/planSchema.js";
 import User from "../models/user.model.js";
 import { sendGymApprovalEmail } from "../utils/emailService.js";
+import Member from "../models/member.model.js";
 
 export const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -150,31 +151,35 @@ export const getAllGymList = async (req, res) => {
       name,
       page = 1,
       limit = 3,
-      minPrice,
-      maxPrice,
+      minPrice, // max budget from user
+      premium,  // premium filter
       lat,
       lng,
       maxDistance,
     } = req.query;
-    // ✅ Convert page & limit to numbers safely
+    // Convert page & limit
     const pageNumber = parseInt(page, 10) || 1;
     const limitNumber = parseInt(limit, 10) || 3;
 
-    // ✅ Convert query params to numbers safely
-    const minPriceNum =
-      minPrice && minPrice !== "undefined" ? parseInt(minPrice) : undefined;
-    const maxPriceNum =
-      maxPrice && maxPrice !== "undefined" ? parseInt(maxPrice) : undefined;
+    // Convert query params
+    const maxPriceNum = minPrice && minPrice !== "undefined" ? parseInt(minPrice) : undefined;
+    const premiumFlag = premium === "true";
     const latNum = lat && lat !== "undefined" ? parseFloat(lat) : undefined;
     const lngNum = lng && lng !== "undefined" ? parseFloat(lng) : undefined;
-    const maxDistanceNum =
-      maxDistance && maxDistance !== "undefined" ? parseInt(maxDistance) : 1000;
+    const maxDistanceNum = maxDistance && maxDistance !== "undefined" ? parseInt(maxDistance) : 1000;
 
     // Base filter
     let filter = {};
-    if (name) filter.name = { $regex: name, $options: "i" };
+    if (name) filter.gymName = { $regex: name, $options: "i" };
 
-    // Nearby filter only if lat & lng present
+    // Apply price / premium filter
+    if (premiumFlag) {
+      filter.fees_monthly = { $gt: 1000 }; // premium gyms
+    } else if (maxPriceNum !== undefined) {
+      filter.fees_monthly = { $lte: maxPriceNum }; // gyms under user's max price
+    }
+
+    // Nearby filter
     if (latNum !== undefined && lngNum !== undefined) {
       filter.location = {
         $near: {
@@ -184,49 +189,24 @@ export const getAllGymList = async (req, res) => {
       };
     }
 
-    // Fetch gyms matching filter
-    let gyms = await Gym.find(filter).select("-password");
-    // Fetch all plans
-    const gymsPlan = await GymPlan.find();
+    // Fetch gyms
+    let gyms = await Gym.find(filter).populate("user").select("-password");
 
-    // Attach images & plans
+    // Only gyms whose user.status is active
+    gyms = gyms.filter((gym) => gym.user?.status === "active");
+
+    // Map images
     let gymsWithFullImages = gyms.map((gym) => {
       const fullImages = (gym.images || []).map(
         (img) => `${process.env.DOMAIN}/${img}`
       );
-      const coverImage = `${process.env.DOMAIN}/${gym.coverImage}`;
-
-      // Match plans
-      let plans = gymsPlan.filter(
-        (plan) => plan.gymId?.toString() === gym._id.toString()
-      );
-
-      // Apply price filter only if minPrice or maxPrice provided
-      if (minPriceNum !== undefined || maxPriceNum !== undefined) {
-        plans = plans.filter((plan) => {
-          const price = plan.price || 0;
-          if (minPriceNum !== undefined && maxPriceNum !== undefined)
-            return price >= minPriceNum && price <= maxPriceNum;
-          if (minPriceNum !== undefined) return price >= minPriceNum;
-          if (maxPriceNum !== undefined) return price <= maxPriceNum;
-          return true;
-        });
-      }
-
+      const coverImage = gym.coverImage[0] && `${process.env.DOMAIN}/${gym.coverImage[0]}`;
       return {
         ...gym.toObject(),
         images: fullImages,
         coverImage,
-        plans,
       };
     });
-
-    // Remove gyms with no plans only if price filter applied
-    if (minPriceNum !== undefined || maxPriceNum !== undefined) {
-      gymsWithFullImages = gymsWithFullImages.filter(
-        (gym) => gym.plans.length > 0
-      );
-    }
 
     // Pagination
     const totalGyms = gymsWithFullImages.length;
@@ -234,7 +214,6 @@ export const getAllGymList = async (req, res) => {
       (pageNumber - 1) * limitNumber,
       pageNumber * limitNumber
     );
-
     res.json({
       success: true,
       data: paginatedGyms,
@@ -242,17 +221,24 @@ export const getAllGymList = async (req, res) => {
         total: totalGyms,
         page: pageNumber,
         limit: limitNumber,
-        totalPages: Math.ceil(totalGyms / limitNumber),
+        totalPages: Math.ceil(totalGyms.length / limitNumber),
       },
     });
   } catch (err) {
+    console.error("Error fetching gyms:", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
 
+
+
+
+
+
 export const getGymDetail = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user.id;
     if (!id) {
       return res
         .status(400)
@@ -260,7 +246,8 @@ export const getGymDetail = async (req, res) => {
     }
 
     const SERVER_URL = process.env.DOMAIN; // ✅ Yaha apna actual base URL likho
-
+  const member = await Member.findOne({ user: userId });
+  const currentGymId = member?.currentGym?.gym;
     // ✅ Single gym fetch
     const gym = await Gym.findById(id).populate("user", "-password");
     if (!gym) {
@@ -287,6 +274,7 @@ export const getGymDetail = async (req, res) => {
       owner_image: gym.owner_image ? `${SERVER_URL}/${gym.owner_image}` : null,
       images: gym.images?.map((imgPath) => `${SERVER_URL}/${imgPath}`) || [],
       plans: gymPlans,
+      currentGymId
     };
 
     res.json({ success: true, data: gymWithFullImages });
