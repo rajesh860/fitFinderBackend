@@ -16,8 +16,6 @@ dotenv.config(); // load env variables
 
 // Example controller function
 
-
-
 export const getActiveGymMembers = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -25,24 +23,26 @@ export const getActiveGymMembers = async (req, res) => {
     // 1️⃣ Find gym of logged-in user
     const gym = await Gym.findOne({ user: userId });
     if (!gym) {
-      return res.status(404).json({ success: false, message: "Gym not found", data: [] });
+      return res
+        .status(404)
+        .json({ success: false, message: "Gym not found", data: [] });
     }
 
     // 2️⃣ Fetch all members of this gym AND exclude 'pending' status
     const members = await Member.find({
-        "currentGym.gym": gym._id
-      })
+      "currentGym.gym": gym._id,
+    })
       .populate({
         path: "user",
         match: { status: { $ne: "pending" } }, // ❌ exclude pending users
-        select: "name email phone status"
+        select: "name email phone status",
       })
       .populate("currentGym.gym", "gymName")
       .populate("currentGym.plan", "name")
       .lean();
 
     // 3️⃣ Filter out members whose user is null (because they were pending)
-    const filteredMembers = members.filter(m => m.user);
+    const filteredMembers = members.filter((m) => m.user);
 
     // 4️⃣ Format with plan price
     const formatted = await Promise.all(
@@ -79,64 +79,58 @@ export const getActiveGymMembers = async (req, res) => {
   }
 };
 
-
-
 // Route
 
 export const findSignalUser = async (req, res) => {
   try {
     const { id } = req.user;
+    // const { gymId } = req.body;
 
-    // 1️⃣ Fetch Member with populated user, gym, plan
+    // User aur Member fetch karo, gym aur plan dono populate
+    // const userData = await User.findById(id).lean()
     const userProfile = await Member.findOne({ user: id })
-      .populate("user", "name email phone") // User info
-      .populate("currentGym.gym", "gymName contact address") // Gym info
-      .populate({
-        path: "currentGym.plan",
-        select: "name duration",
-      })
+      .populate("user", "name email phone") // plan ka name chahiye
+      .populate("currentGym.gym", "gymName contact address plan") // plan ka name chahiye
+      .populate("currentGym.plan", "name duration")
       .lean();
+    const progress = await Progress.findOne({
+      member: userProfile?._id,
+    }).lean();
+    // console.log(progress, "progress");
+
+    //    const attendance = await Attendance.findOne({
+    //   member: id,
+    //   gym: gymId,
+    //   // date: { $gte: todayStart, $lte: todayEnd },
+    // }).populate("gym", "gymName") // Gym ka naam bhi populate kar sakte ho
+    //   .sort({ date: -1 }).lean();
 
     if (!userProfile) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 2️⃣ Fetch member's progress
-    const progress = await Progress.findOne({ member: userProfile._id }).lean();
-
-    // 3️⃣ Merge data for response
     const mergedUser = {
-      memberId: userProfile._id,
-      name: userProfile.user?.name,
-      email: userProfile.user?.email,
-      phone: userProfile.user?.phone,
-      gymName: userProfile.currentGym?.gym?.gymName || null,
-      gymStatus: userProfile.currentGym?.status || null,
-      membership_start: userProfile.currentGym?.membership_start || null,
-      membership_end: userProfile.currentGym?.membership_end || null,
-      planName: userProfile.currentGym?.plan?.name || null,
-      planDuration: userProfile.currentGym?.plan?.duration || null,
+      // ...userData,
       progress: progress?.current || null,
+      planName: userProfile?.currentGym?.plan.name,
+      name: userProfile?.user?.name,
+      email: userProfile?.user?.email,
+      phone: userProfile?.user?.phone,
+      gymName: userProfile?.currentGym?.gym?.gymName,
+      gymStatus: userProfile?.currentGym?.status,
+      membership_start: userProfile?.currentGym?.membership_start,
+      membership_end: userProfile?.currentGym?.membership_end,
+      // currentGym:{...userProfile?.currentGym?.gym},
+      ...userProfile,
+      // attendance:attendance || null,
       photo: userProfile.photo
         ? `${process.env.DOMAIN}/${userProfile.photo}`
         : null,
-      // Optional: Include other member fields if needed
-      medical_conditions: userProfile.medical_conditions || [],
-      injuries: userProfile.injuries || [],
-      fitness_goals: userProfile.fitness_goals || [],
-      emergency_contacts: userProfile.emergency_contacts || [],
-      fee_status: userProfile.fee_status || null,
-      currentGym: userProfile.currentGym || null,
+      // plan: userProfile.plan?.name || null, // populate ke baad name milega
     };
-
-    return res.json({ success: true, data: mergedUser });
+    res.json(mergedUser);
   } catch (error) {
-    console.error("❌ Error fetching user profile:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server Error",
-      error: error.message,
-    });
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
@@ -145,37 +139,39 @@ export const getUserAttendence = async (req, res) => {
   const { gymId } = req.params;
 
   try {
-    const getMember = await Member.findOne({ user: id }).populate("user", "name photo");
-    const user={
-      userPhoto:`${process.env.DOMAIN}/${getMember.photo}`,
-  name:getMember.user?.name || ""
-}
+    const getMember = await Member.findOne({ user: id }).populate(
+      "user",
+      "name photo"
+    );
+    const user = {
+      userPhoto: `${process.env.DOMAIN}/${getMember.photo}`,
+      name: getMember.user?.name || "",
+    };
     const attendance = await Attendance.find({
       member: getMember?._id,
       gym: gymId,
       // date: { $gte: todayStart, $lte: todayEnd },
     })
-    .populate("gym", "gymName") // Gym ka naam bhi populate kar sakte ho
-    .sort({ date: -1 })
-    .lean();
-    res.json({ data: attendance, status: true,user});
+      .populate("gym", "gymName") // Gym ka naam bhi populate kar sakte ho
+      .sort({ date: -1 })
+      .lean();
+    res.json({ data: attendance, status: true, user });
   } catch (error) {
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
-
 
 export const getUserProgressByGym = async (req, res) => {
   try {
     // ✅ Find member linked to logged-in user
     const member = await Member.findOne({ user: req.user.id });
     if (!member)
-      return res.status(404).json({ success: false, message: "Member not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Member not found" });
 
     const memberId = member._id;
     const { gymId } = req.params;
-
-  
 
     // ✅ Fetch progress
     const progress = await Progress.findOne({ member: memberId, gym: gymId })
@@ -185,7 +181,9 @@ export const getUserProgressByGym = async (req, res) => {
       .lean();
 
     if (!progress)
-      return res.status(404).json({ success: false, message: "No progress found for this gym" });
+      return res
+        .status(404)
+        .json({ success: false, message: "No progress found for this gym" });
 
     res.json({
       success: true,
@@ -200,7 +198,6 @@ export const getUserProgressByGym = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 
 export const getUserGymHistory = async (req, res) => {
   try {
@@ -306,9 +303,9 @@ export const updateUserProfile = async (req, res) => {
     }
     // ✅ Update user
     if (updateData.phone) {
-  await User.findByIdAndUpdate(getUser.user, { phone: updateData.phone });
-  delete updateData.phone;
-}
+      await User.findByIdAndUpdate(getUser.user, { phone: updateData.phone });
+      delete updateData.phone;
+    }
     const updatedMember = await Member.findByIdAndUpdate(
       getUser?._id,
       { $set: updateData },
@@ -335,13 +332,13 @@ export const gymApply = async (req, res) => {
     if (!gym) {
       return res.status(404).json({ success: false, message: "Gym not found" });
     }
-    
+
     // 2️⃣ Fetch the member
     const member = await Member.findOne({ user: memberId });
     if (!member) {
       return res
-      .status(404)
-      .json({ success: false, message: "Member not found" });
+        .status(404)
+        .json({ success: false, message: "Member not found" });
     }
 
     // 3️⃣ Prevent duplicate gym application
@@ -684,7 +681,6 @@ export const getProgressUserOfGym = async (req, res) => {
       .populate("gym", "gymName") // populate gym name
       .select("-__v"); // optional cleanup
 
-
     if (!progress) {
       return res.status(200).json({
         success: false,
@@ -702,8 +698,6 @@ export const getProgressUserOfGym = async (req, res) => {
     });
   }
 };
-
-
 
 export const changeUserStatus = async (req, res) => {
   try {
@@ -782,7 +776,7 @@ export const userGymEnquiry = async (req, res) => {
 export const getUserGymEnquiry = async (req, res) => {
   try {
     const { id: userId } = req.user; // Get logged-in user's ID from auth middleware
-console.log(userId)
+    console.log(userId);
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
@@ -820,11 +814,8 @@ export const getGymAdminGymEnquiries = async (req, res) => {
     const enquiries = await Enquiry.find({
       gymId: gym._id,
       status: { $in: statusArray },
-    }).populate(
-      "userId",
-      "name email phone gender dob address"
-    );
-    console.log(enquiries,gym,"enquiries")
+    }).populate("userId", "name email phone gender dob address");
+    console.log(enquiries, gym, "enquiries");
     res.status(200).json({
       success: true,
       data: enquiries,
@@ -955,12 +946,6 @@ export const enquiryCancelled = async (req, res) => {
   res.json({ message: "Enquiry cancelled successfully", enquiry });
 };
 
-
-
-
-
-
-
 export const getMembershipHistory = async (req, res) => {
   try {
     const { gymId, memberId } = req.query;
@@ -987,13 +972,17 @@ export const getMembershipHistory = async (req, res) => {
       }
       targetMemberId = memberId; // admin/gym can see any member's history
     } else {
-      return res.status(403).json({ success: false, message: "Not authorized" });
+      return res
+        .status(403)
+        .json({ success: false, message: "Not authorized" });
     }
 
     // 🔹 Fetch member
     const member = await Member.findById(targetMemberId);
     if (!member) {
-      return res.status(404).json({ success: false, message: "Member not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Member not found" });
     }
 
     // 🔹 Fetch membership history for the gym
@@ -1016,16 +1005,12 @@ export const getMembershipHistory = async (req, res) => {
   }
 };
 
-
-
-
 // 1️⃣ Member side (self-check)
 
 // Request:
 
 // GET /api/membership-history?gymId=64f9b7a1c9a1e2a1b2c3d4f5
 // Authorization: Bearer <member_token>
-
 
 // Admin/Gym side (member-specific)
 
