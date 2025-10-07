@@ -8,6 +8,7 @@ import { GymPlan, Plan } from "../models/planSchema.js";
 import User from "../models/user.model.js";
 import { sendGymApprovalEmail } from "../utils/emailService.js";
 import Member from "../models/member.model.js";
+import MembershipHistory from "../models/planHistroy.model.js";
 
 export const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -358,7 +359,7 @@ export const gymProfile = async (req, res) => {
       coverImage: gym.coverImage ? `${SERVER_URL}/${gym.coverImage}` : null,
       images: gym.images?.map((imgPath) => `${SERVER_URL}/${imgPath}`) || [],
       owner_image:
-        gym.owner_image?.map((imgPath) => `${SERVER_URL}/${imgPath}`) || [],
+       `${SERVER_URL}/${gym.owner_image}`,
       plans: gymPlans,
     };
 
@@ -428,5 +429,116 @@ export const updateGym = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server Error" });
+  }
+};
+
+
+
+
+export const renewGymPlanByAdmin = async (req, res) => {
+  try {
+    const ownerId = req.user.id; // gym owner/admin
+    const { memberId, gymId, planId } = req.body; // frontend se pass
+
+    if (!memberId || !gymId || !planId) {
+      return res.status(400).json({
+        success: false,
+        message: "memberId, gymId, and planId are required",
+      });
+    }
+
+    // 1️⃣ Check gym ownership
+    const ownerGym = await Gym.findOne({ user: ownerId, _id: gymId });
+    if (!ownerGym) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized or gym not found",
+      });
+    }
+
+    // 2️⃣ Fetch member
+    const member = await Member.findById(memberId);
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        message: "Member not found",
+      });
+    }
+
+    // 3️⃣ Validate plan
+    const gymPlan = await GymPlan.findOne({
+      gymId,
+      _id: planId,
+    }).populate("planId", "name durationInMonths");
+
+    if (!gymPlan) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid plan for this gym",
+      });
+    }
+
+    // 4️⃣ Expire current active plan (currentGym + history)
+    if (member.currentGym?.gym?.toString() === gymId.toString()) {
+      // expire currentGym
+      member.currentGym.status = "expired";
+
+      // expire matching plan in MembershipHistory
+      await MembershipHistory.updateMany(
+        {
+          member: member._id,
+          gym: gymId,
+          status: "active",
+        },
+        { $set: { status: "expired" } }
+      );
+    }
+
+    // 5️⃣ Set new membership dates
+    const startDate = new Date();
+    const durationMonths = parseInt(gymPlan.durationInMonths, 10) || 1;
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + durationMonths);
+
+    // 6️⃣ Update currentGym
+    member.currentGym = {
+      gym: gymId,
+      plan: planId,
+      membership_start: startDate,
+      membership_end: endDate,
+      status: "active",
+    };
+    member.fee_status = "paid";
+
+    await member.save();
+
+    // 7️⃣ Add new record to MembershipHistory
+    await MembershipHistory.create({
+      member: member._id,
+      gym: gymId,
+      plan: planId,
+      membership_start: startDate,
+      membership_end: endDate,
+      status: "active",
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `✅ Plan renewed successfully for member ${member._id}`,
+      data: {
+        memberId: member._id,
+        gymId,
+        planName: gymPlan.planId.name,
+        membership_start: startDate,
+        membership_end: endDate,
+      },
+    });
+  } catch (err) {
+    console.error("❌ Error in renewGymPlanByAdmin:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: err.message,
+    });
   }
 };

@@ -4,6 +4,7 @@ import {
   updateGym,
   gymProfile,
   getAllGymList,
+  renewGymPlanByAdmin,
 } from "../controller/gym.js";
 import {
   createGymPlan,
@@ -23,7 +24,7 @@ import {
   getGymBookingRequests,
   getProgressUserOfGym,
 } from "../controller/user.controller.js";
-import { viewuserDetail } from "../controller/gymController/index.js";
+import { deleteMemberCurrentGym, viewuserDetail } from "../controller/gymController/index.js";
 import { generateGymQR } from "../controller/qrController/index.js";
 const router = express.Router();
 
@@ -45,6 +46,9 @@ router.post("/generate/qr", authMiddleware, generateGymQR);
 router.get("/users/:id", authMiddleware, viewuserDetail);
 
 router.get("/detail/:id", authMiddleware, getGymDetail);
+router.post("/plan-renew", authMiddleware, renewGymPlanByAdmin);
+
+router.post("/delete-member/:memberId", authMiddleware, deleteMemberCurrentGym);
 
 router.get("/profile", authMiddleware, gymProfile);
 router.post("/get-enquiry/:status", authMiddleware, getGymAdminGymEnquiries);

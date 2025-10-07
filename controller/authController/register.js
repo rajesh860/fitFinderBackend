@@ -141,6 +141,7 @@ export const userRegistorByAdmin = async (req, res) => {
   try {
     const { name, email, phone, password, userRole, planId } = req.body;
     const adminId = req.user.id; // 🧠 Assume admin login se aa raha hai
+
     // 🔍 1️⃣ Get Admin's Gym
     const adminGym = await Gym.findOne({ user: adminId });
     if (!adminGym) {
@@ -183,16 +184,18 @@ export const userRegistorByAdmin = async (req, res) => {
       name,
       email,
       phone,
-      password, // 👈 Plain password (testing purpose)
+      password, // 👈 Plain password (hash in production)
       userRole,
       isVerified: true,
     }).save();
 
-    // 💾 6️⃣ Create Member profile linked to Gym & Plan
+    // 🗓 6️⃣ Membership Dates
     const membershipStart = new Date();
-    const membershipEnd = new Date();
-    membershipEnd.setMonth(membershipEnd.getMonth() + Number(selectedPlan.durationInMonths));
+    const membershipEnd = dayjs(membershipStart)
+      .add(Number(selectedPlan.durationInMonths), "month")
+      .toDate();
 
+    // 💾 7️⃣ Create Member Profile
     const newMember = await new Member({
       user: newUser._id,
       currentGym: {
@@ -208,10 +211,25 @@ export const userRegistorByAdmin = async (req, res) => {
       fee_status: "paid",
     }).save();
 
+    // 💾 8️⃣ Save Plan History (NEW)
+    const planHistory = await new PlanHistory({
+      user: newUser._id,
+      member: newMember._id,
+      gym: adminGym._id,
+      plan: selectedPlan.planId._id,
+      price: selectedPlan.price,
+      durationInMonths: selectedPlan.durationInMonths,
+      start_date: membershipStart,
+      end_date: membershipEnd,
+      payment_status: "paid",
+      status: "active",
+      createdBy: adminId,
+    }).save();
+
     return res.json({
       success: true,
       message: "User registered and added to gym successfully ✅",
-      data: { user: newUser, member: newMember },
+      data: { user: newUser, member: newMember, planHistory },
     });
   } catch (err) {
     console.error("Registration Error:", err);

@@ -2,6 +2,7 @@ import Member from "../../models/member.model.js";
 import Attendance from "../../models/attendence.model.js";
 import Progress from "../../models/progess.model.js";
 import { GymPlan } from "../../models/planSchema.js";
+import Gym from "../../models/gym.model.js";
 
 export const viewuserDetail = async (req, res) => {
   try {
@@ -95,6 +96,63 @@ export const viewuserDetail = async (req, res) => {
       .json({ success: false, message: "Server Error", error: error.message });
   }
 };
+
+
+export const deleteMemberCurrentGym = async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    const ownerId = req.user.id; // logged-in gym owner
+
+    // 1️⃣ Fetch owner's gym
+    const ownerGym = await Gym.findOne({ user: ownerId });
+    if (!ownerGym) {
+      return res.status(404).json({
+        success: false,
+        message: "Gym not found for this owner",
+      });
+    }
+
+    // 2️⃣ Fetch member
+    const member = await Member.findById(memberId);
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        message: "Member not found",
+      });
+    }
+
+    // 3️⃣ Check if member's currentGym matches this gym
+    if (!member.currentGym || member.currentGym.gym.toString() !== ownerGym._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: "Member is not associated with your gym currently.",
+      });
+    }
+
+    // 4️⃣ Remove currentGym details
+    member.currentGym = null;
+
+    // Optional: mark membership_end and fee_status
+    member.membership_end = new Date();
+    member.fee_status = "pending";
+
+    await member.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Member's current gym details removed successfully ✅",
+      data: member,
+    });
+  } catch (err) {
+    console.error("❌ Error deleting member current gym:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: err.message,
+    });
+  }
+};
+
 
 // export const getAttendance = async (req, res) => {
 //   try {

@@ -3,11 +3,12 @@ import {
   changeUserStatus,
   enquiryCancelled,
   findSignalUser,
+  getActiveGymMembers,
+  getMembershipHistory,
   getUserAttendence,
   getUserGymEnquiry,
   getUserGymHistory,
   getUserProgressByGym,
-  getUsers,
   gymApply,
   updateUserProfile,
   userGymEnquiry,
@@ -28,10 +29,12 @@ router.get("/get-attendence/:gymId", authMiddleware, getUserAttendence);
 router.get("/get-progress/:gymId", authMiddleware, getUserProgressByGym);
 
 router.get("/get-gym-history", authMiddleware, getUserGymHistory);
+router.post("/get-plan-history", authMiddleware, getMembershipHistory);
 
-router.get("/list", authMiddleware, getUsers);
+router.get("/list", authMiddleware, getActiveGymMembers);
 
 router.get("/profile", authMiddleware, findSignalUser);
+
 router.put("/:id/status", changeUserStatus);
 router.post("/enquiry", authMiddleware, userGymEnquiry);
 router.post("/get-enquiry", authMiddleware, getUserGymEnquiry);

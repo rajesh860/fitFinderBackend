@@ -5,7 +5,10 @@ import gymRoutes from "./routes/gymRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
-import {cronService, markAbsentCron } from "./controller/cronJobs.js"
+import { 
+  // backfillAllMembersAbsentAttendance,
+   dailyCronJobs,
+  } from "./controller/cronJobs.js"
 import cron from "node-cron";
 import "./env.js"; // MongoDB connection
 import path from "path";
@@ -25,11 +28,8 @@ app.use('/auth', authRoutes);    // Login endpoint here
 app.use("/admin", adminRoutes);
 app.use("/gym", gymRoutes);
 app.use("/user", userRoutes);
-
-cronService()
-markAbsentCron()
-// Health check
-
+// markAbsentMembers()
+dailyCronJobs();
 // Har month ke 1st date 00:00 AM pe run hoga
 cron.schedule("0 0 1 * *", async () => {
   console.log("🕒 Running monthly gym analytics cron job...");

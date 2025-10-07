@@ -10,7 +10,6 @@ export const generateGymQR = async (req, res) => {
     const gymId = req.user.id;
 
     const gym = await Gym.findOne({ user: gymId });
-    console.log(gym, gymId);
     if (!gym)
       return res.status(404).json({ success: false, message: "Gym not found" });
 
