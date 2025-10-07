@@ -97,7 +97,6 @@ export const viewuserDetail = async (req, res) => {
   }
 };
 
-
 export const deleteMemberCurrentGym = async (req, res) => {
   try {
     const { memberId } = req.params;
@@ -122,7 +121,10 @@ export const deleteMemberCurrentGym = async (req, res) => {
     }
 
     // 3️⃣ Check if member's currentGym matches this gym
-    if (!member.currentGym || member.currentGym.gym.toString() !== ownerGym._id.toString()) {
+    if (
+      !member.currentGym ||
+      member.currentGym.gym.toString() !== ownerGym._id.toString()
+    ) {
       return res.status(400).json({
         success: false,
         message: "Member is not associated with your gym currently.",
@@ -152,7 +154,6 @@ export const deleteMemberCurrentGym = async (req, res) => {
     });
   }
 };
-
 
 // export const getAttendance = async (req, res) => {
 //   try {

@@ -93,18 +93,18 @@ export const verifyOtp = async (req, res) => {
     }
 
     // 💾 Save User in DB
-const user = new User(userData);
-await user.save();
+    const user = new User(userData);
+    await user.save();
 
     // 🧩 Role-based profile creation
-   if (tempUser.userRole === "gym") {
-  // ✅ use gymName from tempUser, not name
-  await new Gym({ user: user._id, gymName: tempUser.gymName }).save();
-} else if (tempUser.userRole === "member") {
-  await new Member({ user: user._id }).save();
-} else if (tempUser.userRole === "admin") {
-  await new Admin({ user: user._id }).save();
-}
+    if (tempUser.userRole === "gym") {
+      // ✅ use gymName from tempUser, not name
+      await new Gym({ user: user._id, gymName: tempUser.gymName }).save();
+    } else if (tempUser.userRole === "member") {
+      await new Member({ user: user._id }).save();
+    } else if (tempUser.userRole === "admin") {
+      await new Admin({ user: user._id }).save();
+    }
 
     // 🧹 Clean temp store
     delete req.app.locals.tempOtpStore[email];
@@ -130,19 +130,23 @@ await user.save();
   }
 };
 
-
-
-
-
-
-
-
 export const userRegistorByAdmin = async (req, res) => {
   try {
-    const { name, email, phone, password, userRole, planId } = req.body;
-    const adminId = req.user.id; // 🧠 Assume admin login se aa raha hai
+    const {
+      name,
+      email,
+      phone,
+      password,
+      userRole,
+      planId,
+      totalAmount,
+      paidAmount,
+      paymentMode,
+      remark,
+    } = req.body;
+    const adminId = req.user.id;
 
-    // 🔍 1️⃣ Get Admin's Gym
+    // 1️⃣ Admin's Gym
     const adminGym = await Gym.findOne({ user: adminId });
     if (!adminGym) {
       return res.status(400).json({
@@ -151,16 +155,15 @@ export const userRegistorByAdmin = async (req, res) => {
       });
     }
 
-    // 🔍 2️⃣ Validate Plan
+    // 2️⃣ Validate Plan
     const selectedPlan = await GymPlan.findById(planId).populate("planId");
     if (!selectedPlan) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid plan selected.",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid plan selected." });
     }
 
-    // 🔒 3️⃣ Only one Admin allowed globally (if needed)
+    // 3️⃣ Admin Role Check
     if (userRole === "admin") {
       const adminExist = await User.findOne({ userRole: "admin" });
       if (adminExist) {
@@ -171,7 +174,7 @@ export const userRegistorByAdmin = async (req, res) => {
       }
     }
 
-    // 🔍 4️⃣ Email existence check
+    // 4️⃣ Email Check
     const exist = await User.findOne({ email });
     if (exist) {
       return res
@@ -179,23 +182,23 @@ export const userRegistorByAdmin = async (req, res) => {
         .json({ success: false, message: "Email already registered" });
     }
 
-    // 💾 5️⃣ Create User
+    // 5️⃣ Create User
     const newUser = await new User({
       name,
       email,
       phone,
-      password, // 👈 Plain password (hash in production)
+      password, // Hash in production
       userRole,
       isVerified: true,
     }).save();
 
-    // 🗓 6️⃣ Membership Dates
+    // 6️⃣ Membership Dates
     const membershipStart = new Date();
     const membershipEnd = dayjs(membershipStart)
       .add(Number(selectedPlan.durationInMonths), "month")
       .toDate();
 
-    // 💾 7️⃣ Create Member Profile
+    // 7️⃣ Create Member Profile
     const newMember = await new Member({
       user: newUser._id,
       currentGym: {
@@ -207,24 +210,57 @@ export const userRegistorByAdmin = async (req, res) => {
       },
       membership_start: membershipStart,
       membership_end: membershipEnd,
-      fee_amount: selectedPlan.price,
-      fee_status: "paid",
+      fee_amount: totalAmount || selectedPlan.price,
+      fee_status:
+        paidAmount >= (totalAmount || selectedPlan.price)
+          ? "paid"
+          : paidAmount > 0
+          ? "pending"
+          : "overdue",
     }).save();
 
-    // 💾 8️⃣ Save Plan History (NEW)
+    // 8️⃣ Save Plan History
     const planHistory = await new PlanHistory({
       user: newUser._id,
       member: newMember._id,
       gym: adminGym._id,
       plan: selectedPlan.planId._id,
-      price: selectedPlan.price,
+      price: totalAmount || selectedPlan.price,
       durationInMonths: selectedPlan.durationInMonths,
       start_date: membershipStart,
       end_date: membershipEnd,
-      payment_status: "paid",
+      payment_status:
+        paidAmount >= (totalAmount || selectedPlan.price)
+          ? "paid"
+          : paidAmount > 0
+          ? "partial"
+          : "pending",
       status: "active",
       createdBy: adminId,
     }).save();
+
+    // 9️⃣ Create Fee Collection Record
+    const pendingAmount =
+      (totalAmount || selectedPlan.price) - (paidAmount || 0);
+    await FeeCollection.create({
+      member: newMember._id,
+      gym: adminGym._id,
+      planName: selectedPlan.planId.name,
+      totalAmount: totalAmount || selectedPlan.price,
+      paidAmount: paidAmount || 0,
+      pendingAmount,
+      startDate: membershipStart,
+      endDate: membershipEnd,
+      status: pendingAmount > 0 ? "pending" : "completed",
+      payments: [
+        {
+          amount: paidAmount || 0,
+          date: new Date(),
+          mode: paymentMode || "cash",
+          remark: remark || "Initial payment",
+        },
+      ],
+    });
 
     return res.json({
       success: true,

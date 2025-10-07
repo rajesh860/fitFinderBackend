@@ -24,8 +24,16 @@ import {
   getGymBookingRequests,
   getProgressUserOfGym,
 } from "../controller/user.controller.js";
-import { deleteMemberCurrentGym, viewuserDetail } from "../controller/gymController/index.js";
+import {
+  deleteMemberCurrentGym,
+  viewuserDetail,
+} from "../controller/gymController/index.js";
 import { generateGymQR } from "../controller/qrController/index.js";
+import { editProgress } from "../controller/progressController/index.js";
+import {
+  addPendingPayment,
+  getAllFeeCollections,
+} from "../controller/feesCollectionController/index.js";
 const router = express.Router();
 
 router.put(
@@ -70,5 +78,7 @@ router.put("/plan-update/:id", authMiddleware, updateGymPlan);
 router.post("/add-progress/:memberId", authMiddleware, addProgressUserByGym);
 router.get("/get-progress/:memberId", authMiddleware, getProgressUserOfGym);
 router.get("/list", getAllGymList);
-
+router.post("/edit-progress/:memberId", authMiddleware, editProgress);
+router.get("/get-fees-collection", authMiddleware, getAllFeeCollections);
+router.post("/add-pending-payment", authMiddleware, addPendingPayment);
 export default router;

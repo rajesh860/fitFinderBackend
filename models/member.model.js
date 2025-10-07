@@ -12,7 +12,12 @@ const CurrentMembershipSchema = new mongoose.Schema({
   plan: { type: mongoose.Schema.Types.ObjectId, ref: "Plan" },
   membership_start: { type: Date, default: Date.now },
   membership_end: { type: Date },
-  status: { type: String, enum: ["active", "expired"], default: "active" },
+  removedBy: { type: String },
+  status: {
+    type: String,
+    enum: ["active", "expired", "removed"],
+    default: "active",
+  },
 });
 const MemberSchema = new mongoose.Schema(
   {
