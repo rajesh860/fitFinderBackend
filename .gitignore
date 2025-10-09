@@ -14,4 +14,4 @@ dist/
 coverage/
 *.sqlite
 *.sqlite3
-.env
+.env.env
