@@ -75,7 +75,7 @@ Your gym membership will expire on ${dayjs(member.membership_end).format(
 // -----------------------------
 export const markAbsentMembers = async () => {
   try {
-    console.log("🔔 Starting absent marking process...");
+    // console.log("🔔 Starting absent marking process...");
 
     // ✅ 1. Get today's start and end time
     const startOfDay = dayjs().startOf("day").toDate();
@@ -167,80 +167,81 @@ export const dailyCronJobs = () => {
 
 
 
-// export const backfillAllMembersAbsentAttendance = async () => {
-//   try {
-//     console.log("🔁 Starting backfill for all active members...");
+// import Attendance from "../models/Attendance.js";
+// import Member from "../models/Member.js";
+// import dayjs from "dayjs";
 
-//     // 1. Get all active members with valid gym
-//     const activeMembers = await Member.find({
-//       "currentGym.status": "active",
-//       "currentGym.gym": { $ne: null },
-//     }).populate("currentGym.gym");
 
-//     console.log(`📋 Total Active Members: ${activeMembers.length}`);
+export const backfillMemberPresentAttendance = async (memberId, gymId) => {
+  try {
+    if (!memberId || !gymId) {
+      throw new Error("MemberId aur GymId dono required hain");
+    }
 
-//     if (!activeMembers.length) {
-//       console.log("⚠️ No active members found. Exiting.");
-//       return;
-//     }
+    // ✅ Member fetch
+    const member = await Member.findById(memberId).populate("currentGym.gym");
+    if (!member) {
+      console.log("⚠️ Member nahi mila:", memberId);
+      return;
+    }
 
-//     let totalAbsentRecords = 0;
+    const startDate = dayjs(member.currentGym.membership_start).startOf("day");
+    const endDate = dayjs().endOf("day");
 
-//     // 2. Loop through each active member
-//     for (const member of activeMembers) {
-//       const startDate = dayjs(member.currentGym.membership_start).startOf("day");
-//       const endDate = dayjs().endOf("day");
+    console.log(`👤 Backfilling attendance for: ${member._id} (${startDate.format("YYYY-MM-DD")} → ${endDate.format("YYYY-MM-DD")})`);
 
-//       console.log(`👤 Checking: ${member._id} (${startDate.format("YYYY-MM-DD")} → ${endDate.format("YYYY-MM-DD")})`);
+    // ✅ Existing attendance fetch
+    const existingAttendances = await Attendance.find({
+      member: member._id,
+      gym: gymId,
+      date: { $gte: startDate.toDate(), $lte: endDate.toDate() },
+    }).select("date");
 
-//       // 3. Get all existing attendance records for this member
-//       const existingAttendances = await Attendance.find({
-//         member: member._id,
-//         date: { $gte: startDate.toDate(), $lte: endDate.toDate() },
-//       }).select("date");
+    const existingDates = new Set(
+      existingAttendances.map((a) => dayjs(a.date).format("YYYY-MM-DD"))
+    );
 
-//       const existingDates = new Set(
-//         existingAttendances.map((a) => dayjs(a.date).format("YYYY-MM-DD"))
-//       );
+    const presentRecords = [];
 
-//       const absentRecords = [];
+    // ✅ Loop through all days from membership_start → today
+    for (
+      let d = startDate.clone();
+      d.isBefore(endDate) || d.isSame(endDate, "day");
+      d = d.add(1, "day")
+    ) {
+      const dateStr = d.format("YYYY-MM-DD");
 
-//       // 4. Loop through each day from membership_start → today
-//       for (
-//         let d = startDate.clone();
-//         d.isBefore(endDate) || d.isSame(endDate, "day");
-//         d = d.add(1, "day")
-//       ) {
-//         const dateStr = d.format("YYYY-MM-DD");
+      // Agar attendance nahi mili us date ki
+      if (!existingDates.has(dateStr)) {
+        presentRecords.push({
+          insertOne: {
+            document: {
+              member: member._id,
+              gym: gymId,
+              date: d.startOf("day").toDate(),
+              status: "present",      // ✅ yaha "present"
+              createdAt: d.startOf("day").toDate(), // ✅ createdAt bhi wahi date
+            },
+          },
+        });
+      }
+    }
 
-//         // Agar attendance nahi mili us date ki
-//         if (!existingDates.has(dateStr)) {
-//           absentRecords.push({
-//             insertOne: {
-//               document: {
-//                 member: member._id,
-//                 gym: member.currentGym.gym,
-//                 date: d.startOf("day").toDate(),
-//                 status: "absent",
-//                 createdAt: new Date(),
-//               },
-//             },
-//           });
-//         }
-//       }
+    // ✅ Bulk insert
+    if (presentRecords.length) {
+      await Attendance.bulkWrite(presentRecords);
+      console.log(`✅ Added ${presentRecords.length} present records for member ${member._id}`);
+    } else {
+      console.log(`✅ Member ${member._id}: All dates already have attendance.`);
+    }
+  } catch (err) {
+    console.error("❌ Error in backfilling present attendance:", err);
+  }
+};
 
-//       // 5. Insert missing absent records
-//       if (absentRecords.length) {
-//         await Attendance.bulkWrite(absentRecords);
-//         console.log(`✅ Member ${member._id}: Added ${absentRecords.length} missing absent records.`);
-//         totalAbsentRecords += absentRecords.length;
-//       } else {
-//         console.log(`✅ Member ${member._id}: All dates have attendance.`);
-//       }
-//     }
 
-//     console.log(`🎉 Backfill completed. Total ${totalAbsentRecords} absent records added.`);
-//   } catch (err) {
-//     console.error("❌ Error in backfilling attendance:", err);
-//   }
-// };
+
+
+
+
+// backfillMemberPresentAttendance("68e5fc9997f757738e40232d","68e1fcdc03e04fa2bc930005")

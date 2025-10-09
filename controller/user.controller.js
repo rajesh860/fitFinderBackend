@@ -898,7 +898,7 @@ export const getGymAdminGymEnquiries = async (req, res) => {
       gymId: gym._id,
       status: { $in: statusArray },
     }).populate("userId", "name email phone gender dob address");
-    console.log(enquiries, gym, "enquiries");
+
     res.status(200).json({
       success: true,
       data: enquiries,

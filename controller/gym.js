@@ -9,7 +9,9 @@ import User from "../models/user.model.js";
 import { sendGymApprovalEmail } from "../utils/emailService.js";
 import Member from "../models/member.model.js";
 import MembershipHistory from "../models/planHistroy.model.js";
-
+import {getPresignedUrl} from "../middleware/presigned.js"
+import { s3 } from "../config/s3.js";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 export const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const dir = "uploads/";
@@ -353,15 +355,21 @@ export const gymProfile = async (req, res) => {
     );
 
     // ✅ Final response
+    // console.log(getPresignedUrl(gym.owner_image))
     const gymWithFullImages = {
-      ...updatedData,
-      logo: gym.logo ? `${SERVER_URL}/${gym.logo}` : null,
-      coverImage: gym.coverImage ? `${SERVER_URL}/${gym.coverImage}` : null,
-      images: gym.images?.map((imgPath) => `${SERVER_URL}/${imgPath}`) || [],
-      owner_image:
-       `${SERVER_URL}/${gym.owner_image}`,
-      plans: gymPlans,
-    };
+  ...updatedData,
+  logo: gym.logo ? await getPresignedUrl(gym.logo) : null,
+  coverImage: gym.coverImage
+    ? await  getPresignedUrl(gym.coverImage[0])
+    : [],
+  images: gym.images
+    ? await Promise.all(gym.images.map((key) => getPresignedUrl(key)))
+    : [],
+  owner_image: gym.owner_image
+    ? await getPresignedUrl(gym.owner_image[0])
+    : null,
+  plans: gymPlans,
+};
 
     res.json({ success: true, data: gymWithFullImages });
   } catch (err) {
@@ -374,27 +382,42 @@ export const gymProfile = async (req, res) => {
 export const updateGym = async (req, res) => {
   try {
     const gymId = req.params.id;
-    const updateData = { ...req.body }; // User sent normal data
+
+    // Pehle current gym data uthao
+    const existingGym = await Gym.findById(gymId);
+    if (!existingGym) {
+      return res.status(404).json({ success: false, message: "Gym not found" });
+    }
+
+    const updateData = { ...req.body }; // normal fields
+
     // ✅ Handle file uploads
     if (req.files) {
-      if (req.files.images) {
-        updateData.images = req.files.images.map((file) => file.path);
+      // Owner image (single)
+      if (req.files.owner_image && req.files.owner_image.length > 0) {
+        updateData.owner_image = req.files.owner_image[0].key;
       }
-      if (req.files.coverImage) {
-        updateData.coverImage = req.files.coverImage.map((file) => file.path);
+
+      // Cover image (single)
+      if (req.files.coverImage && req.files.coverImage.length > 0) {
+        updateData.coverImage = req.files.coverImage[0].key; // maxCount=1
       }
-      if (req.files.owner_image) {
-        updateData.owner_image = req.files.owner_image.map((file) => file.path);
+
+      // Gallery images (multiple)
+      if (req.files.images && req.files.images.length > 0) {
+        // const newGalleryImages = req.files.images.map((f) => f.key);
+
+        // Merge existing images with new ones
+      updateData.images = [...(existingGym.images || []), ...req.files.images.map(f => f.key)];
       }
-      // gymCertificates (multiple)
-      if (req.files["gymCertificates"]) {
-        updateData.gymCertificates = req.files["gymCertificates"].map(
-          (file) => file.path
-        );
+
+      // Gym Certificates (multiple)
+      if (req.files.gymCertificates && req.files.gymCertificates.length > 0) {
+        updateData.gymCertificates = req.files.gymCertificates.map((f) => f.key);
       }
     }
 
-    // ✅ If longitude & latitude sent, update location field
+    // ✅ Update location
     if (req.body.longitude && req.body.latitude) {
       const longitude = parseFloat(req.body.longitude);
       const latitude = parseFloat(req.body.latitude);
@@ -412,19 +435,13 @@ export const updateGym = async (req, res) => {
       };
     }
 
-    // ✅ Update only sent fields
-    const updatedGym = await Gym.findOneAndUpdate({ _id: gymId }, updateData, {
-      new: true,
-    });
-
-    if (!updatedGym) {
-      return res.status(404).json({ success: false, message: "Gym not found" });
-    }
+    // ✅ Update gym
+    const updatedGym = await Gym.findByIdAndUpdate(gymId, updateData, { new: true });
 
     res.json({
       success: true,
       message: "Gym updated successfully",
-      // data: updatedGym,
+      // data: updatedGym
     });
   } catch (error) {
     console.error(error);
@@ -542,3 +559,59 @@ export const renewGymPlanByAdmin = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
+export const deleteGalleryImage = async (req, res) => {
+  try {
+    const { gymId, imageKey, type } = req.body;
+    
+    if (!gymId || !imageKey || !type) {
+      return res.status(400).json({ success: false, message: "Gym ID, Image Key & Type required" });
+    }
+    
+    // Build the exact path stored in DB
+    const key = `uploads/${decodeURIComponent(imageKey)}`; 
+    console.log("Deleting image:", key);
+    const command = new DeleteObjectCommand({
+      Bucket: "fitcrewimages", // ya "fitcrewimages"
+      Key: key, // example: uploads/1759923520091-998045494-WhatsApp%20Image...
+    });
+    // console.log(command,"command")
+    await s3.send(command);
+
+    let update = {};
+    if (type === "gallery") {
+      update = { $pull: { images: key } };
+    } else if (type === "owner") {
+      update = { $pull: { owner_image: key } };
+    } else if (type === "cover") {
+      update = { $pull: { coverImage: key } };
+    } else {
+      return res.status(400).json({ success: false, message: "Invalid type" });
+    }
+
+    const updatedGym = await Gym.findByIdAndUpdate(gymId, update, { new: true });
+
+    if (!updatedGym) {
+      return res.status(404).json({ success: false, message: "Gym not found" });
+    }
+
+    console.log("Updated images:", updatedGym.images);
+
+    return res.json({
+      success: true,
+      message: `${type} image deleted successfully`,
+      data: updatedGym,
+    });
+
+  } catch (error) {
+    console.error("Delete Image Error:", error);
+    return res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+

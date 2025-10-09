@@ -4,6 +4,9 @@ import Gym from "../../models/gym.model.js";
 import Member from "../../models/member.model.js";
 import { generateOtp, sendOtpEmail } from "../otpService.js";
 import { GymPlan } from "../../models/planSchema.js";
+import dayjs from "dayjs";
+import MembershipHistory from "../../models/planHistroy.model.js";
+import feesCollectionModel from "../../models/feesCollection.model.js";
 
 export const requestOtp = async (req, res) => {
   try {
@@ -131,7 +134,7 @@ export const verifyOtp = async (req, res) => {
 };
 
 export const userRegistorByAdmin = async (req, res) => {
-  try {
+ try {
     const {
       name,
       email,
@@ -144,131 +147,126 @@ export const userRegistorByAdmin = async (req, res) => {
       paymentMode,
       remark,
     } = req.body;
+
     const adminId = req.user.id;
 
     // 1️⃣ Admin's Gym
     const adminGym = await Gym.findOne({ user: adminId });
     if (!adminGym) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
         message: "Admin gym not found. Please create gym first.",
       });
     }
 
-    // 2️⃣ Validate Plan
-    const selectedPlan = await GymPlan.findById(planId).populate("planId");
-    if (!selectedPlan) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid plan selected." });
-    }
-
-    // 3️⃣ Admin Role Check
-    if (userRole === "admin") {
-      const adminExist = await User.findOne({ userRole: "admin" });
-      if (adminExist) {
-        return res.status(400).json({
-          success: false,
-          message: "Admin account already exists. Cannot create another.",
-        });
-      }
-    }
-
-    // 4️⃣ Email Check
-    const exist = await User.findOne({ email });
-    if (exist) {
+    // 2️⃣ Check if email already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
       return res
         .status(400)
         .json({ success: false, message: "Email already registered" });
     }
 
-    // 5️⃣ Create User
-    const newUser = await new User({
+    // 3️⃣ Create User
+    const newUser = await User.create({
       name,
       email,
       phone,
-      password, // Hash in production
+      password, // hash in production
       userRole,
       isVerified: true,
-    }).save();
+    });
 
-    // 6️⃣ Membership Dates
+    // 4️⃣ Validate Plan
+    const gymPlan = await GymPlan.findById(planId).populate("planId", "name durationInMonths");
+    if (!gymPlan) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid plan selected" });
+    }
+
+    // 5️⃣ Set Membership Dates
     const membershipStart = new Date();
-    const membershipEnd = dayjs(membershipStart)
-      .add(Number(selectedPlan.durationInMonths), "month")
-      .toDate();
+    const durationMonths = parseInt(gymPlan.planId.durationInMonths, 10) || 1;
+    const membershipEnd = new Date(membershipStart);
+    membershipEnd.setMonth(membershipEnd.getMonth() + durationMonths);
 
-    // 7️⃣ Create Member Profile
-    const newMember = await new Member({
+    // 6️⃣ Create Member Profile
+    const newMember = await Member.create({
       user: newUser._id,
       currentGym: {
         gym: adminGym._id,
-        plan: selectedPlan.planId._id,
+        plan: gymPlan.planId._id,
         membership_start: membershipStart,
         membership_end: membershipEnd,
         status: "active",
       },
       membership_start: membershipStart,
       membership_end: membershipEnd,
-      fee_amount: totalAmount || selectedPlan.price,
+      fee_amount: totalAmount,
       fee_status:
-        paidAmount >= (totalAmount || selectedPlan.price)
+        paidAmount >= totalAmount
           ? "paid"
           : paidAmount > 0
           ? "pending"
           : "overdue",
-    }).save();
+    });
 
-    // 8️⃣ Save Plan History
-    const planHistory = await new PlanHistory({
-      user: newUser._id,
+    // 7️⃣ Membership History
+    await MembershipHistory.create({
       member: newMember._id,
       gym: adminGym._id,
-      plan: selectedPlan.planId._id,
-      price: totalAmount || selectedPlan.price,
-      durationInMonths: selectedPlan.durationInMonths,
-      start_date: membershipStart,
-      end_date: membershipEnd,
-      payment_status:
-        paidAmount >= (totalAmount || selectedPlan.price)
-          ? "paid"
-          : paidAmount > 0
-          ? "partial"
-          : "pending",
+      plan: gymPlan.planId._id,
+      membership_start: membershipStart,
+      membership_end: membershipEnd,
       status: "active",
-      createdBy: adminId,
-    }).save();
+    });
 
-    // 9️⃣ Create Fee Collection Record
-    const pendingAmount =
-      (totalAmount || selectedPlan.price) - (paidAmount || 0);
-    await FeeCollection.create({
+    // 8️⃣ Fee Collection
+    const pendingAmount = totalAmount - paidAmount;
+    await feesCollectionModel.create({
       member: newMember._id,
       gym: adminGym._id,
-      planName: selectedPlan.planId.name,
-      totalAmount: totalAmount || selectedPlan.price,
-      paidAmount: paidAmount || 0,
+      planName: gymPlan.planId.name,
+      totalAmount,
+      paidAmount,
       pendingAmount,
       startDate: membershipStart,
       endDate: membershipEnd,
       status: pendingAmount > 0 ? "pending" : "completed",
       payments: [
         {
-          amount: paidAmount || 0,
+          amount: paidAmount,
           date: new Date(),
-          mode: paymentMode || "cash",
+          mode: paymentMode,
           remark: remark || "Initial payment",
         },
       ],
     });
 
-    return res.json({
+    // 9️⃣ Final Response
+    return res.status(200).json({
       success: true,
-      message: "User registered and added to gym successfully ✅",
-      data: { user: newUser, member: newMember, planHistory },
+      message: `✅ Member registered successfully with ${gymPlan.planId.name}`,
+      data: {
+        userId: newUser._id,
+        memberId: newMember._id,
+        gymId: adminGym._id,
+        planName: gymPlan.planId.name,
+        membership_start: membershipStart,
+        membership_end: membershipEnd,
+        totalAmount,
+        paidAmount,
+        pendingAmount,
+        feeStatus: newMember.fee_status,
+      },
     });
   } catch (err) {
-    console.error("Registration Error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("❌ Member Registration Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: err.message,
+    });
   }
 };

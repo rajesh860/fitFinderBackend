@@ -5,6 +5,7 @@ import {
   gymProfile,
   getAllGymList,
   renewGymPlanByAdmin,
+  deleteGalleryImage,
 } from "../controller/gym.js";
 import {
   createGymPlan,
@@ -57,6 +58,7 @@ router.get("/detail/:id", authMiddleware, getGymDetail);
 router.post("/plan-renew", authMiddleware, renewGymPlanByAdmin);
 
 router.post("/delete-member/:memberId", authMiddleware, deleteMemberCurrentGym);
+router.post("/delete-gallery-image", authMiddleware, deleteGalleryImage);
 
 router.get("/profile", authMiddleware, gymProfile);
 router.post("/get-enquiry/:status", authMiddleware, getGymAdminGymEnquiries);
@@ -81,4 +83,6 @@ router.get("/list", getAllGymList);
 router.post("/edit-progress/:memberId", authMiddleware, editProgress);
 router.get("/get-fees-collection", authMiddleware, getAllFeeCollections);
 router.post("/add-pending-payment", authMiddleware, addPendingPayment);
+
+
 export default router;

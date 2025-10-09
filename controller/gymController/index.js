@@ -3,6 +3,7 @@ import Attendance from "../../models/attendence.model.js";
 import Progress from "../../models/progess.model.js";
 import { GymPlan } from "../../models/planSchema.js";
 import Gym from "../../models/gym.model.js";
+import MembershipHistory from "../../models/planHistroy.model.js";
 
 export const viewuserDetail = async (req, res) => {
   try {
@@ -23,10 +24,10 @@ export const viewuserDetail = async (req, res) => {
     // Fetch GymPlan details if currentGym exists
     let gymPlanData = null;
 
-    const getAttendance = await Attendance.find({
-      member: id,
-      gym: doc?.currentGym?.gym?._id,
-    });
+    // const getAttendance = await Attendance.find({
+    //   member: id,
+    //   gym: doc?.currentGym?.gym?._id,
+    // });
     // ✅ If currentGym exists, find price & duration from GymPlan
     if (doc.currentGym?.gym?._id && doc.currentGym?.plan?._id) {
       gymPlanData = await GymPlan.findOne({
@@ -68,7 +69,7 @@ export const viewuserDetail = async (req, res) => {
       // Current membership (flattened)
       currentMembership: doc.currentGym
         ? {
-            attendance: getAttendance,
+            // attendance: getAttendance,
             gymId: doc.currentGym.gym?._id || null,
             gymName: doc.currentGym.gym?.gymName || (doc.gym ? doc.gym : null),
             gymLocation: doc.currentGym.gym?.location || null,
@@ -155,37 +156,89 @@ export const deleteMemberCurrentGym = async (req, res) => {
   }
 };
 
-// export const getAttendance = async (req, res) => {
-//   try {
-//     const { memberId } = req.params;
 
-//     // 1️⃣ Member check
-//     const member = await Member.findById(memberId).populate("user", "name email phone");
-//     if (!member) {
-//       return res.status(404).json({ success: false, message: "Member not found" });
+export const getMemberAttendance = async (req, res) => {
+  try {
+    const { memberId, membershipId } = req.params;
+
+    // 1️⃣ Get membership history
+    const membership = await MembershipHistory.findById(membershipId);
+    if (!membership) {
+      return res.status(404).json({ success: false, message: "Membership not found" });
+    }
+
+    const startDate = membership.membership_start;
+    const endDate = membership.membership_end;
+
+    // 2️⃣ Fetch attendance within membership period
+    const attendance = await Attendance.find({
+      member: memberId,
+      gym: membership.gym,
+      date: { $gte: startDate, $lte: endDate },
+    }).sort({ date: 1 });
+
+    // 3️⃣ Response
+    return res.status(200).json({
+      success: true,
+      data: {
+        membership: {
+          membershipId: membership._id,
+          plan: membership.plan,
+          startDate,
+          endDate,
+          status: membership.status,
+        },
+        attendance,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: "Server error", error: err.message });
+  }
+};
+
+
+// export const getPlanHistory = async (req, res) => {
+//   try {
+//     const {id} = req.user
+//     const { memberId } = req.body;
+
+//     // ✅ Validate required fields
+//     if (!gymId || !memberId) {
+//       return res.status(400).json({ message: "gymId and memberId are required" });
 //     }
 
-//     // 2️⃣ Attendance fetch
-//     const records = await Attendance.find({ member: memberId })
-//       .populate("gym", "gymName location")
-//       .sort({ date: -1 })
-//       .lean();
+//     // ✅ Find gym and member
+//     const findGym = await Gym.findOne({ user: id });
+//     const findMember = await Member.findOne({ _id: memberId });
 
-//     // 3️⃣ Format records
-//     const formatted = records.map(r => ({
-//       id: r._id,
-//       memberId: r.member,
-//       memberName: member.user?.name || "",
-//       gymId: r.gym?._id || null,
-//       gymName: r.gym?.gymName || "",
-//       date: r.date,
-//       status: r.status,
-//     }));
+//     if (!findGym) {
+//       return res.status(404).json({ message: "Gym not found" });
+//     }
+//     if (!findMember) {
+//       return res.status(404).json({ message: "Member not found" });
+//     }
 
-//     res.json({ success: true, data: formatted });
+//     // ✅ Fetch plan history
+//     const planHistory = await MembershipHistory.find({
+//       gym: findGym._id,
+//       member: findMember._id,
+//     }).populate("plan") // optional: populate plan details
+//       .populate("gym")
+//       .populate("member");
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Plan history fetched successfully",
+//       data: planHistory,
+//     });
 
 //   } catch (error) {
-//     console.error("Error fetching attendance:", error);
-//     res.status(500).json({ success: false, message: error.message });
+//     console.error("Error fetching plan history:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: error.message,
+//     });
 //   }
 // };

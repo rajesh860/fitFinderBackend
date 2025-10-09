@@ -18,6 +18,7 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 import { buyPlan } from "../controller/plan/plan.js";
 // import { markAttendance } from "../controller/userController/index.js";
 import { scanGymQR } from "../controller/qrController/index.js";
+import { getMemberAttendance } from "../controller/gymController/index.js";
 const router = express.Router();
 
 //gym apply
@@ -34,6 +35,8 @@ router.post("/get-plan-history", authMiddleware, getMembershipHistory);
 router.get("/list", authMiddleware, getActiveGymMembers);
 
 router.get("/profile", authMiddleware, findSignalUser);
+router.get("/get-member-attendance/:membershipId/:memberId", authMiddleware, getMemberAttendance);
+// router.get("/get-plan-history", authMiddleware, getPlanHistory);
 
 router.put("/:id/status", changeUserStatus);
 router.post("/enquiry", authMiddleware, userGymEnquiry);

@@ -13,8 +13,11 @@ import cron from "node-cron";
 import "./env.js"; // MongoDB connection
 import path from "path";
 import { generateMonthlyAnalytics } from "./controller/analyticsController/index.js";
+import dotenv from "dotenv";
 
 const app = express();
+
+dotenv.config();
 app.use(cors());
 app.use(bodyParser.json());
 
