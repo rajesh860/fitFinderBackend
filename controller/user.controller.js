@@ -71,7 +71,7 @@ export const getActiveGymMembers = async (req, res) => {
           fee_status: m.fee_status || "-",
           registered_at: m.registered_at,
           gym: m.currentGym?.gym?.gymName || "-",
-          photo: m.photo ?  getPresignedUrl(m.photo): null,
+          photo: m.photo ? await getPresignedUrl(m.photo): null,
         };
       })
     );
