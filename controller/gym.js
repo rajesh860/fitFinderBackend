@@ -302,15 +302,15 @@ export const getGymDetail = async (req, res) => {
     // ✅ Final response
    const gymWithFullImages = {
   ...gym.toObject(),
-  logo: gym.logo ? `${SERVER_URL}/${gym.logo}` : null,
+  logo: gym.logo ? await getPresignedUrl(gym.logo) : null,
   coverImage: gym.coverImage && gym.coverImage[0] 
-    ? await getSignedUrl(gym.coverImage[0]) 
+    ? await getPresignedUrl(gym.coverImage[0]) 
     : null,
   owner_image: gym.owner_image && gym.owner_image.length > 0
-    ? await Promise.all(gym.owner_image.map(img => getSignedUrl(img)))
+    ? await Promise.all(gym.owner_image.map(img => getPresignedUrl(img)))
     : [],
   images: gym.images && gym.images.length > 0
-    ? await Promise.all(gym.images.map(img => getSignedUrl(img)))
+    ? await Promise.all(gym.images.map(img => getPresignedUrl(img)))
     : [],
   plans: gymPlans,
   currentGymId
