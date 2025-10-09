@@ -13,6 +13,9 @@ import GymBooking from "../models/gymBooking.model.js";
 import mongoose from "mongoose";
 import MembershipHistory from "../models/planHistroy.model.js";
 import feesCollectionModel from "../models/feesCollection.model.js";
+import { getPresignedUrl } from "../middleware/presigned.js";
+import { s3 } from "../config/s3.js";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 dotenv.config(); // load env variables
 
 // Example controller function
@@ -105,7 +108,7 @@ export const findSignalUser = async (req, res) => {
     //   // date: { $gte: todayStart, $lte: todayEnd },
     // }).populate("gym", "gymName") // Gym ka naam bhi populate kar sakte ho
     //   .sort({ date: -1 }).lean();
-
+        const userProfile2 = await Member.findOne({ user: id })
     if (!userProfile) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -125,7 +128,7 @@ export const findSignalUser = async (req, res) => {
       ...userProfile,
       // attendance:attendance || null,
       photo: userProfile.photo
-        ? `${process.env.DOMAIN}/${userProfile.photo}`
+        ? await getPresignedUrl(userProfile.photo)
         : null,
       // plan: userProfile.plan?.name || null, // populate ke baad name milega
     };
@@ -316,20 +319,10 @@ export const updateUserProfile = async (req, res) => {
   try {
     const memberId = req.params.id;
     const allowedFields = [
-      "name",
-      "email",
-      "phone",
-      "dob",
-      "address",
-      "blood_group",
-      "medical_conditions",
-      "injuries",
-      "fitness_goals",
-      "emergency_contacts",
-      "referred_by",
-      "occupation",
-      "notes",
-      "gender",
+      "name","email","phone","dob","address","blood_group",
+      "medical_conditions","injuries","fitness_goals",
+      "emergency_contacts","referred_by","occupation",
+      "notes","gender",
     ];
 
     const updateData = {};
@@ -337,37 +330,46 @@ export const updateUserProfile = async (req, res) => {
       if (req.body[field] !== undefined) updateData[field] = req.body[field];
     });
 
-    // ✅ Fetch current user
-    const getUser = await Member.findOne({ _id: memberId });
-    // console.log(getUser,memberId,"getUser")
+    const getUser = await Member.findById(memberId);
     if (!getUser) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Member not found" });
+      return res.status(404).json({ success: false, message: "Member not found" });
     }
 
-    // ✅ If new photo uploaded
-    if (req.file) {
-      // 🔥 Delete old photo if exists
-      // if (getUser.photo) {
-      //   const oldPhotoPath = path.join(process.cwd(), getUser.photo); // resolve full path
-      //   if (fs.existsSync(oldPhotoPath)) {
-      //     fs.unlinkSync(oldPhotoPath);
-      //     console.log("Old photo deleted:", oldPhotoPath);
-      //   }
-      // }
-      // ✅ Set new photo path
-      updateData.photo = req.file.path;
+    // ✅ Handle new photo upload
+    if (req.files && req.files.photo && req.files.photo[0]) {
+      const newPhoto = req.files.photo[0].location;
+
+      // 🔥 Delete old photo from S3 if exists
+      if (getUser.photo) {
+        let oldKey = getUser.photo.split(`${process.env.AWS_BUCKET_NAME}/`)[1]; 
+        if (!oldKey) {
+          oldKey = getUser.photo.split("uploads/")[1];
+        }
+
+        if (oldKey) {
+          const command = new DeleteObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME, // jaise "fitcrewimages"
+            Key: `uploads/${oldKey}`, // S3 me actual path
+          });
+          await s3.send(command);
+          // console.log("Old photo deleted from S3:", oldKey);
+        }
+      }
+
+      // ✅ Set new photo
+      updateData.photo = newPhoto;
     }
-    // ✅ Update user
+
+    // ✅ Update user's phone in User collection
     if (updateData.phone) {
       await User.findByIdAndUpdate(getUser.user, { phone: updateData.phone });
       delete updateData.phone;
     }
+
     const updatedMember = await Member.findByIdAndUpdate(
-      getUser?._id,
+      memberId,
       { $set: updateData },
-      { new: true, runValidators: true } // runValidators ensures enum check
+      { new: true, runValidators: true }
     ).select("-password");
 
     res.json({
