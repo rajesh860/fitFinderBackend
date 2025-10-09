@@ -71,7 +71,7 @@ export const getActiveGymMembers = async (req, res) => {
           fee_status: m.fee_status || "-",
           registered_at: m.registered_at,
           gym: m.currentGym?.gym?.gymName || "-",
-          photo: m.photo ? `${process.env.DOMAIN}/${m.photo}` : null,
+          photo: m.photo ?  getPresignedUrl(m.photo): null,
         };
       })
     );
@@ -205,7 +205,7 @@ export const getUserAttendence = async (req, res) => {
       "name photo"
     );
     const user = {
-      userPhoto: `${process.env.DOMAIN}/${getMember.photo}`,
+      userPhoto:await getPresignedUrl(getMember.photo),
       name: getMember.user?.name || "",
     };
     const attendance = await Attendance.find({

@@ -146,26 +146,31 @@ export const getGymList = async (req, res) => {
     const gymsPlan = await GymPlan.find().lean();
 
     // Map gyms with full image URLs and plans
-    const gymsWithFullImages = filteredGyms.map((gym) => {
-      const fullImages = (gym.images || []).map(
-        (img) => `${process.env.DOMAIN}/${img}`
-      );
+    const gymsWithFullImages = await Promise.all(
+  filteredGyms.map(async (gym) => {
+    // ✅ Images ke liye presigned URLs
+    const fullImages = await Promise.all(
+      (gym.images || []).map((img) => getPresignedUrl(img))
+    );
 
-      const coverImage = (gym.coverImage || []).map(
-        (img) => `${process.env.DOMAIN}/${img}`
-      );
+    // ✅ Cover images ke liye presigned URLs
+    const coverImage = await Promise.all(
+      (gym.coverImage || []).map((img) => getPresignedUrl(img))
+    );
 
-      const plans = gymsPlan.filter(
-        (plan) => plan.gymId?.toString() === gym._id.toString()
-      );
+    // ✅ Plans for this gym
+    const plans = gymsPlan.filter(
+      (plan) => plan.gymId?.toString() === gym._id.toString()
+    );
 
-      return {
-        ...gym,
-        images: fullImages,
-        coverImage,
-        plans,
-      };
-    });
+    return {
+      ...gym.toObject ? gym.toObject() : gym, // agar Mongoose doc hai to
+      images: fullImages,
+      coverImage,
+      plans,
+    };
+  })
+);
 
     res.json({ success: true, data: gymsWithFullImages });
   } catch (err) {

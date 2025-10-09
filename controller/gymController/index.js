@@ -53,7 +53,7 @@ export const viewuserDetail = async (req, res) => {
       address: doc.address || null,
       gender: doc.gender || null,
       dob: doc.dob || null,
-      photo: doc.photo ? `${process.env.DOMAIN}/${doc.photo}` : null,
+      photo: doc.photo ? await getPresignedUrl(doc.photo) : null,
       fee_status: doc.fee_status || null,
       blood_group: doc.blood_group || null,
       medical_conditions: doc.medical_conditions || [],
