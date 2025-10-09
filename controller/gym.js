@@ -12,6 +12,7 @@ import MembershipHistory from "../models/planHistroy.model.js";
 import {getPresignedUrl} from "../middleware/presigned.js"
 import { s3 } from "../config/s3.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 export const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const dir = "uploads/";
@@ -226,17 +227,19 @@ export const getAllGymList = async (req, res) => {
     gyms = gyms.filter((gym) => gym.user?.status === "active");
 
     // Map images
-    let gymsWithFullImages = gyms.map((gym) => {
-      const fullImages = (gym.images || []).map(
-        (img) => `${process.env.DOMAIN}/${img}`
-      );
-      const coverImage = gym.coverImage[0] && getPresignedUrl(gym.coverImage[0]);
-      return {
-        ...gym.toObject(),
-        images: fullImages,
-        coverImage,
-      };
-    });
+let gymsWithFullImages = await Promise.all(
+  gyms.map(async (gym) => {
+    const fullImages = await Promise.all(
+      (gym.images || []).map((img) => getPresignedUrl(img))
+    );
+    const coverImage = gym.coverImage[0] && await getPresignedUrl(gym.coverImage[0]);
+    return {
+      ...gym.toObject(),
+      images: fullImages,
+      coverImage,
+    };
+  })
+);
 
     // Pagination
     const totalGyms = gymsWithFullImages.length;
@@ -297,15 +300,21 @@ export const getGymDetail = async (req, res) => {
       })
     );
     // ✅ Final response
-    const gymWithFullImages = {
-      ...gym.toObject(),
-      logo: gym.logo ? `${SERVER_URL}/${gym.logo}` : null,
-      coverImage: gym.coverImage ? `${SERVER_URL}/${gym.coverImage}` : null,
-      owner_image: gym.owner_image ? `${SERVER_URL}/${gym.owner_image}` : null,
-      images: gym.images?.map((imgPath) => `${SERVER_URL}/${imgPath}`) || [],
-      plans: gymPlans,
-      currentGymId
-    };
+   const gymWithFullImages = {
+  ...gym.toObject(),
+  logo: gym.logo ? `${SERVER_URL}/${gym.logo}` : null,
+  coverImage: gym.coverImage && gym.coverImage[0] 
+    ? await getSignedUrl(gym.coverImage[0]) 
+    : null,
+  owner_image: gym.owner_image && gym.owner_image.length > 0
+    ? await Promise.all(gym.owner_image.map(img => getSignedUrl(img)))
+    : [],
+  images: gym.images && gym.images.length > 0
+    ? await Promise.all(gym.images.map(img => getSignedUrl(img)))
+    : [],
+  plans: gymPlans,
+  currentGymId
+};
 
     res.json({ success: true, data: gymWithFullImages });
   } catch (err) {
