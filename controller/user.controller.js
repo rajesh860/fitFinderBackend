@@ -59,7 +59,6 @@ export const getActiveGymMembers = async (req, res) => {
           }).lean();
           planPrice = gymPlan?.price || 0;
         }
-
         return {
           id: m._id,
           name: m.user?.name || "-",
@@ -337,7 +336,7 @@ export const updateUserProfile = async (req, res) => {
 
     // ✅ Handle new photo upload
     if (req.files && req.files.photo && req.files.photo[0]) {
-      const newPhoto = req.files.photo[0].location;
+      const newPhoto = req.files.photo[0].key;
 
       // 🔥 Delete old photo from S3 if exists
       if (getUser.photo) {
