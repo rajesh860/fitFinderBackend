@@ -230,7 +230,7 @@ export const getAllGymList = async (req, res) => {
       const fullImages = (gym.images || []).map(
         (img) => `${process.env.DOMAIN}/${img}`
       );
-      const coverImage = gym.coverImage[0] && `${process.env.DOMAIN}/${gym.coverImage[0]}`;
+      const coverImage = gym.coverImage[0] && getPresignedUrl(gym.coverImage[0]);
       return {
         ...gym.toObject(),
         images: fullImages,
