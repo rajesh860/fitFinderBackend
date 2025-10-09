@@ -13,6 +13,8 @@ import {getPresignedUrl} from "../middleware/presigned.js"
 import { s3 } from "../config/s3.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import ReviewModel from "../models/review.model.js";
+import mongoose from "mongoose";
 export const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const dir = "uploads/";
@@ -187,35 +189,31 @@ export const getAllGymList = async (req, res) => {
       name,
       page = 1,
       limit = 3,
-      minPrice, // max budget from user
-      premium,  // premium filter
+      minPrice,
+      premium,
       lat,
       lng,
       maxDistance,
     } = req.query;
-    // Convert page & limit
+
     const pageNumber = parseInt(page, 10) || 1;
     const limitNumber = parseInt(limit, 10) || 3;
 
-    // Convert query params
     const maxPriceNum = minPrice && minPrice !== "undefined" ? parseInt(minPrice) : undefined;
     const premiumFlag = premium === "true";
     const latNum = lat && lat !== "undefined" ? parseFloat(lat) : undefined;
     const lngNum = lng && lng !== "undefined" ? parseFloat(lng) : undefined;
     const maxDistanceNum = maxDistance && maxDistance !== "undefined" ? parseInt(maxDistance) : 1000;
 
-    // Base filter
     let filter = {};
     if (name) filter.gymName = { $regex: name, $options: "i" };
 
-    // Apply price / premium filter
     if (premiumFlag) {
-      filter.fees_monthly = { $gt: 1000 }; // premium gyms
+      filter.fees_monthly = { $gt: 1000 };
     } else if (maxPriceNum !== undefined) {
-      filter.fees_monthly = { $lte: maxPriceNum }; // gyms under user's max price
+      filter.fees_monthly = { $lte: maxPriceNum };
     }
 
-    // Nearby filter
     if (latNum !== undefined && lngNum !== undefined) {
       filter.location = {
         $near: {
@@ -225,33 +223,60 @@ export const getAllGymList = async (req, res) => {
       };
     }
 
-    // Fetch gyms
-    let gyms = await Gym.find(filter).populate("user").select("-password");
-
-    // Only gyms whose user.status is active
+    // ✅ Fetch gyms and filter active ones
+    let gyms = await Gym.find(filter).populate("user").select("-password  -aboutGym -images -branchQrCode" );
     gyms = gyms.filter((gym) => gym.user?.status === "active");
 
-    // Map images
-let gymsWithFullImages = await Promise.all(
-  gyms.map(async (gym) => {
-    const fullImages = await Promise.all(
-      (gym.images || []).map((img) => getPresignedUrl(img))
-    );
-    const coverImage = gym.coverImage[0] && await getPresignedUrl(gym.coverImage[0]);
-    return {
-      ...gym.toObject(),
-      images: fullImages,
-      coverImage,
-    };
-  })
-);
+    // ✅ Get gym IDs for aggregation
+    const gymIds = gyms.map((g) => g._id);
 
-    // Pagination
-    const totalGyms = gymsWithFullImages.length;
-    const paginatedGyms = gymsWithFullImages.slice(
+    // ✅ Aggregate review stats for all gyms in one query
+    const reviewStats = await ReviewModel.aggregate([
+      { $match: { gym: { $in: gymIds } } },
+      {
+        $group: {
+          _id: "$gym",
+          avgRating: { $avg: "$rating" },
+          totalReviews: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // ✅ Convert aggregation to map for fast lookup
+    const reviewMap = {};
+    reviewStats.forEach((r) => {
+      reviewMap[r._id.toString()] = {
+        avgRating: r.avgRating.toFixed(1),
+        totalReviews: r.totalReviews,
+      };
+    });
+
+    // ✅ Attach images + reviews
+    const gymsWithFullData = await Promise.all(
+      gyms.map(async (gym) => {
+        // const fullImages = await Promise.all(
+        //   (gym.images || []).map((img) => getPresignedUrl(img))
+        // );
+        const coverImage =
+          gym.coverImage[0] && (await getPresignedUrl(gym.coverImage[0]));
+
+        return {
+          ...gym.toObject(),
+          // images: fullImages,
+          coverImage,
+          avgRating: reviewMap[gym._id.toString()]?.avgRating || 0,
+          totalReviews: reviewMap[gym._id.toString()]?.totalReviews || 0,
+        };
+      })
+    );
+
+    // ✅ Pagination
+    const totalGyms = gymsWithFullData.length;
+    const paginatedGyms = gymsWithFullData.slice(
       (pageNumber - 1) * limitNumber,
       pageNumber * limitNumber
     );
+
     res.json({
       success: true,
       data: paginatedGyms,
@@ -259,7 +284,7 @@ let gymsWithFullImages = await Promise.all(
         total: totalGyms,
         page: pageNumber,
         limit: limitNumber,
-        totalPages: Math.ceil(totalGyms.length / limitNumber),
+        totalPages: Math.ceil(totalGyms / limitNumber),
       },
     });
   } catch (err) {
@@ -277,15 +302,16 @@ export const getGymDetail = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
+
     if (!id) {
       return res
         .status(400)
         .json({ success: false, message: "Gym ID is required" });
     }
 
-    const SERVER_URL = process.env.DOMAIN; // ✅ Yaha apna actual base URL likho
-  const member = await Member.findOne({ user: userId });
-  const currentGymId = member?.currentGym?.gym;
+    const member = await Member.findOne({ user: userId });
+    const currentGymId = member?.currentGym?.gym;
+
     // ✅ Single gym fetch
     const gym = await Gym.findById(id).populate("user", "-password");
     if (!gym) {
@@ -294,6 +320,7 @@ export const getGymDetail = async (req, res) => {
 
     // ✅ Gym plans lao
     const gymPlansRaw = await GymPlan.find({ gymId: id });
+
     // ✅ Plans ke names fetch karo (manual join)
     const gymPlans = await Promise.all(
       gymPlansRaw.map(async (gp) => {
@@ -304,28 +331,51 @@ export const getGymDetail = async (req, res) => {
         };
       })
     );
+
+    // ✅ Gym reviews ka aggregate (average rating + total reviews)
+    const stats = await ReviewModel.aggregate([
+      { $match: { gym: new mongoose.Types.ObjectId(id) } },
+      {
+        $group: {
+          _id: "$gym",
+          avgRating: { $avg: "$rating" },
+          totalReviews: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const avgRating = stats.length > 0 ? stats[0].avgRating : 0;
+    const totalReviews = stats.length > 0 ? stats[0].totalReviews : 0;
+
     // ✅ Final response
-   const gymWithFullImages = {
-  ...gym.toObject(),
-  logo: gym.logo ? await getPresignedUrl(gym.logo) : null,
-  coverImage: gym.coverImage && gym.coverImage[0] 
-    ? await getPresignedUrl(gym.coverImage[0]) 
-    : null,
-  owner_image: gym.owner_image && gym.owner_image.length > 0
-    ? await Promise.all(gym.owner_image.map(img => getPresignedUrl(img)))
-    : [],
-  images: gym.images && gym.images.length > 0
-    ? await Promise.all(gym.images.map(img => getPresignedUrl(img)))
-    : [],
-  plans: gymPlans,
-  currentGymId
-};
+    const gymWithFullImages = {
+      ...gym.toObject(),
+      logo: gym.logo ? await getPresignedUrl(gym.logo) : null,
+      coverImage:
+        gym.coverImage && gym.coverImage[0]
+          ? await getPresignedUrl(gym.coverImage[0])
+          : null,
+      owner_image:
+        gym.owner_image && gym.owner_image.length > 0
+          ? await Promise.all(gym.owner_image.map((img) => getPresignedUrl(img)))
+          : [],
+      images:
+        gym.images && gym.images.length > 0
+          ? await Promise.all(gym.images.map((img) => getPresignedUrl(img)))
+          : [],
+      plans: gymPlans,
+      currentGymId,
+      avgRating, // ⭐ Added
+      totalReviews, // ⭐ Added
+    };
 
     res.json({ success: true, data: gymWithFullImages });
   } catch (err) {
+    console.error("Error fetching gym details:", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+
 
 export const gymProfile = async (req, res) => {
   try {

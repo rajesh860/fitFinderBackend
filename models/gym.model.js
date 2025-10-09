@@ -15,7 +15,8 @@ const GymSchema = new mongoose.Schema({
   gymCertificates: [String],
   branchQrCode: { type: String, default: "" },
   // status: { type: String, enum:["pending","rejected","approved"], default: "pending" },
-
+  avgRating: { type: Number, default: 0 },
+  totalReviews: { type: Number, default: 0 },
   location: {
     type: {
       type: String,

@@ -244,4 +244,4 @@ export const backfillMemberPresentAttendance = async (memberId, gymId) => {
 
 
 
-// backfillMemberPresentAttendance("68e5fc9997f757738e40232d","68e1fcdc03e04fa2bc930005")
+// backfillMemberPresentAttendance("68e7a43ea4c84aebfc6baa5a","68e1fcdc03e04fa2bc930005")

@@ -19,6 +19,7 @@ import { buyPlan } from "../controller/plan/plan.js";
 // import { markAttendance } from "../controller/userController/index.js";
 import { scanGymQR } from "../controller/qrController/index.js";
 import { getMemberAttendance } from "../controller/gymController/index.js";
+import { addOrUpdateReview } from "../controller/reviewController/index.js";
 const router = express.Router();
 
 //gym apply
@@ -44,7 +45,8 @@ router.post("/get-enquiry", authMiddleware, getUserGymEnquiry);
 router.post("/enquiry-cancelled/:enquiryId", authMiddleware, enquiryCancelled);
 router.post("/buy-plan", authMiddleware, buyPlan);
 router.post("/mark-attendance", authMiddleware, scanGymQR);
-
+// POST: Add or Update Review
+router.post("/add-review", authMiddleware, addOrUpdateReview);
 router.put(
   "/update-profile/:id",
   authMiddleware,

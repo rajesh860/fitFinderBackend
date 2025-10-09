@@ -4,6 +4,7 @@ import Progress from "../../models/progess.model.js";
 import { GymPlan } from "../../models/planSchema.js";
 import Gym from "../../models/gym.model.js";
 import MembershipHistory from "../../models/planHistroy.model.js";
+import { getPresignedUrl } from "../../middleware/presigned.js";
 
 export const viewuserDetail = async (req, res) => {
   try {
