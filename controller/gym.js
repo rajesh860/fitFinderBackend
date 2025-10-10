@@ -15,6 +15,7 @@ import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import ReviewModel from "../models/review.model.js";
 import mongoose from "mongoose";
+import GymBooking from "../models/gymBooking.model.js";
 export const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const dir = "uploads/";
@@ -318,10 +319,9 @@ export const getGymDetail = async (req, res) => {
       return res.status(404).json({ success: false, message: "Gym not found" });
     }
 
-    // ✅ Gym plans lao
+    // ✅ Gym plans
     const gymPlansRaw = await GymPlan.find({ gymId: id });
 
-    // ✅ Plans ke names fetch karo (manual join)
     const gymPlans = await Promise.all(
       gymPlansRaw.map(async (gp) => {
         const plan = await Plan.findById(gp.planId).select("name");
@@ -332,7 +332,7 @@ export const getGymDetail = async (req, res) => {
       })
     );
 
-    // ✅ Gym reviews ka aggregate (average rating + total reviews)
+    // ✅ Reviews aggregate
     const stats = await ReviewModel.aggregate([
       { $match: { gym: new mongoose.Types.ObjectId(id) } },
       {
@@ -346,6 +346,13 @@ export const getGymDetail = async (req, res) => {
 
     const avgRating = stats.length > 0 ? stats[0].avgRating : 0;
     const totalReviews = stats.length > 0 ? stats[0].totalReviews : 0;
+
+    // ✅ Check if user has applied (GymBooking)
+    const booking = await GymBooking.findOne({ user: userId, gym: id });
+
+    const gymApply = booking
+      ? { applied: true, status: booking.status }
+      : { applied: false };
 
     // ✅ Final response
     const gymWithFullImages = {
@@ -365,8 +372,9 @@ export const getGymDetail = async (req, res) => {
           : [],
       plans: gymPlans,
       currentGymId,
-      avgRating, // ⭐ Added
-      totalReviews, // ⭐ Added
+      avgRating,
+      totalReviews,
+      gymApply, // ✅ Added this
     };
 
     res.json({ success: true, data: gymWithFullImages });

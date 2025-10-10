@@ -5,6 +5,7 @@ import { GymPlan } from "../../models/planSchema.js";
 import Gym from "../../models/gym.model.js";
 import MembershipHistory from "../../models/planHistroy.model.js";
 import { getPresignedUrl } from "../../middleware/presigned.js";
+import feesCollectionModel from "../../models/feesCollection.model.js";
 
 export const viewuserDetail = async (req, res) => {
   try {
@@ -98,7 +99,6 @@ export const viewuserDetail = async (req, res) => {
       .json({ success: false, message: "Server Error", error: error.message });
   }
 };
-
 export const deleteMemberCurrentGym = async (req, res) => {
   try {
     const { memberId } = req.params;
@@ -135,17 +135,24 @@ export const deleteMemberCurrentGym = async (req, res) => {
 
     // 4️⃣ Remove currentGym details
     member.currentGym = null;
-
-    // Optional: mark membership_end and fee_status
     member.membership_end = new Date();
     member.fee_status = "pending";
-
     await member.save();
+
+    // 5️⃣ Delete related fee collection records
+    const deletedFees = await feesCollectionModel.deleteMany({
+      member: memberId,
+      gym: ownerGym._id,
+    });
+
 
     return res.status(200).json({
       success: true,
-      message: "Member's current gym details removed successfully ✅",
-      data: member,
+      message: "Member's current gym details and fee records removed successfully ✅",
+      data: {
+        member,
+        deletedFeeCollections: deletedFees.deletedCount,
+      },
     });
   } catch (err) {
     console.error("❌ Error deleting member current gym:", err);
