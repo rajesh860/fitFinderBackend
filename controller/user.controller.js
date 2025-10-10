@@ -447,7 +447,16 @@ export const approveGymBooking = async (req, res) => {
   try {
     const { requestId } = req.params;
     const ownerId = req.user?.id;
-    const { planId, totalAmount, paidAmount, paymentMode, remark } = req.body;
+    const {
+      planId,
+      totalAmount,
+      paidAmount,
+      paymentMode,
+      remark,
+      isManual,
+      startDate: manualStartDate,
+      endDate: manualEndDate,
+    } = req.body;
 
     // 1️⃣ Owner's Gym
     const ownerGym = await Gym.findOne({ user: ownerId });
@@ -480,7 +489,6 @@ export const approveGymBooking = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Member not found for this user" });
     }
-
     // 5️⃣ Validate Plan
     const gymPlan = await GymPlan.findOne({
       gymId: request.gym._id,
@@ -508,10 +516,18 @@ export const approveGymBooking = async (req, res) => {
     }
 
     // 7️⃣ Set Membership Dates
-    const startDate = new Date();
-    const durationMonths = parseInt(gymPlan.durationInMonths, 10) || 1;
-    const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + durationMonths);
+    let startDate = new Date();
+    let endDate = new Date();
+
+    if (isManual && manualStartDate && manualEndDate) {
+      // ✅ Manual dates from frontend
+      startDate = new Date(manualStartDate);
+      endDate = new Date(manualEndDate);
+    } else {
+      // ✅ Auto calculate based on plan duration
+      const durationMonths = parseInt(gymPlan.planId.durationInMonths, 10) || 1;
+      endDate.setMonth(endDate.getMonth() + durationMonths);
+    }
 
     // 8️⃣ Update Current Membership
     member.currentGym = {
@@ -595,6 +611,7 @@ export const approveGymBooking = async (req, res) => {
     });
   }
 };
+
 
 export const rejectGymBooking = async (req, res) => {
   try {

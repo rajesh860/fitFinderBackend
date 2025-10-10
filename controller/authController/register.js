@@ -134,7 +134,7 @@ export const verifyOtp = async (req, res) => {
 };
 
 export const userRegistorByAdmin = async (req, res) => {
- try {
+  try {
     const {
       name,
       email,
@@ -146,11 +146,13 @@ export const userRegistorByAdmin = async (req, res) => {
       paidAmount,
       paymentMode,
       remark,
+      isManual, // ✅ frontend se true/false
+      manualStartDate, // optional
+      manualEndDate,   // optional
     } = req.body;
 
     const adminId = req.user.id;
 
-    // 1️⃣ Admin's Gym
     const adminGym = await Gym.findOne({ user: adminId });
     if (!adminGym) {
       return res.status(404).json({
@@ -159,7 +161,6 @@ export const userRegistorByAdmin = async (req, res) => {
       });
     }
 
-    // 2️⃣ Check if email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res
@@ -167,31 +168,37 @@ export const userRegistorByAdmin = async (req, res) => {
         .json({ success: false, message: "Email already registered" });
     }
 
-    // 3️⃣ Create User
     const newUser = await User.create({
       name,
       email,
       phone,
-      password, // hash in production
+      password,
       userRole,
       isVerified: true,
     });
 
-    // 4️⃣ Validate Plan
-    const gymPlan = await GymPlan.findById(planId).populate("planId", "name durationInMonths");
+    const gymPlan = await GymPlan.findById(planId).populate(
+      "planId",
+      "name durationInMonths"
+    );
     if (!gymPlan) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid plan selected" });
     }
 
-    // 5️⃣ Set Membership Dates
-    const membershipStart = new Date();
-    const durationMonths = parseInt(gymPlan.planId.durationInMonths, 10) || 1;
-    const membershipEnd = new Date(membershipStart);
-    membershipEnd.setMonth(membershipEnd.getMonth() + durationMonths);
+    // ✅ Membership Dates
+    let membershipStart, membershipEnd;
+    if (isManual && manualStartDate && manualEndDate) {
+      membershipStart = new Date(manualStartDate);
+      membershipEnd = new Date(manualEndDate);
+    } else {
+      membershipStart = new Date();
+      const durationMonths = parseInt(gymPlan.planId.durationInMonths, 10) || 1;
+      membershipEnd = new Date(membershipStart);
+      membershipEnd.setMonth(membershipEnd.getMonth() + durationMonths);
+    }
 
-    // 6️⃣ Create Member Profile
     const newMember = await Member.create({
       user: newUser._id,
       currentGym: {
@@ -212,7 +219,6 @@ export const userRegistorByAdmin = async (req, res) => {
           : "overdue",
     });
 
-    // 7️⃣ Membership History
     await MembershipHistory.create({
       member: newMember._id,
       gym: adminGym._id,
@@ -222,7 +228,6 @@ export const userRegistorByAdmin = async (req, res) => {
       status: "active",
     });
 
-    // 8️⃣ Fee Collection
     const pendingAmount = totalAmount - paidAmount;
     await feesCollectionModel.create({
       member: newMember._id,
@@ -244,7 +249,6 @@ export const userRegistorByAdmin = async (req, res) => {
       ],
     });
 
-    // 9️⃣ Final Response
     return res.status(200).json({
       success: true,
       message: `✅ Member registered successfully with ${gymPlan.planId.name}`,
