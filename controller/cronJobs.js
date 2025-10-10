@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import dayjs from "dayjs";
 import Member from "../models/member.model.js";
 import Attendance from "../models/attendence.model.js";
+import User from "../models/user.model.js";
 
 
 // --- Mail transporter
@@ -244,4 +245,62 @@ export const backfillMemberPresentAttendance = async (memberId, gymId) => {
 
 
 
-// backfillMemberPresentAttendance("68e7a43ea4c84aebfc6baa5a","68e1fcdc03e04fa2bc930005")
+// backfillMemberPresentAttendance("68e7dd536cb98dc16555255d","68e1fcdc03e04fa2bc930005") 
+
+
+
+
+
+
+
+export const createMembersFromUsers = async (req, res) => {
+  try {
+    // ✅ 1. Fetch all active users with role 'member'
+    const users = await User.find({ userRole: "member", status: "active" });
+
+    let createdCount = 0;
+    const skippedUsers = [];
+
+    for (const user of users) {
+      // ✅ Skip if Member already exists
+      const existingMember = await Member.findOne({ user: user._id });
+      if (existingMember) {
+        skippedUsers.push(user._id);
+        continue;
+      }
+
+      // ✅ Create Member object from User data
+      await Member.create({
+        user: user._id,
+        // Optional: map some default fields
+        address: "",
+        gender: "None",
+        dob: "",
+        photo: "",
+        currentGym: null,
+        gymHistory: [],
+        medical_conditions: [],
+        injuries: [],
+        fitness_goals: [],
+        emergency_contacts: [],
+        referred_by: "",
+        occupation: "",
+        notes: "",
+      });
+
+      createdCount++;
+    }
+    console.log("Members created successfully")
+
+    // res.status(200).json({
+    //   success: true,
+    //   message: `${createdCount} Members created successfully.`,
+    //   skipped: skippedUsers,
+    // });
+  } catch (error) {
+    console.error("Error creating members:", error.message);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+// createMembersFromUsers()

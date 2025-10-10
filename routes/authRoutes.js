@@ -1,6 +1,7 @@
 import express from "express";
 import {
   requestOtp,
+  resendOtp,
   userRegistorByAdmin,
   verifyOtp,
 } from "../controller/authController/register.js";
@@ -12,6 +13,7 @@ const router = express.Router();
 router.post("/admin-login", adminLogin);
 
 router.post("/login", login);
+router.post("/resend-otp", resendOtp);
 
 router.post("/register", requestOtp);
 router.post("/register-by-admin", authMiddleware, userRegistorByAdmin);

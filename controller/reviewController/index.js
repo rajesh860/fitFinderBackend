@@ -73,3 +73,32 @@ export const addOrUpdateReview = async (req, res) => {
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+
+
+
+export const getReview = async (req,res)=>{
+  try{
+    const {gymId} = req.body
+    if(!gymId){
+      return res.status(400).json({
+        success: false,
+        message: "gym id required",
+      });
+    }
+  const review = await ReviewModel.find({ gym:gymId }).populate("user" , "name");
+    if(!review.length){
+      return res.status(400).json({
+        success: false,
+        message: "review not found",
+      });
+    }
+  res.status(200).json({
+      success: true,
+      message: "Review Found",
+      data:review,
+    });
+  }catch(error) {
+    console.error("Error adding review:", error.message);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+}

@@ -8,51 +8,59 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    // find user in User collection
-    const user = await User.findOne({ email });
+    // ✅ Convert email to lowercase before search
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // ✅ Find user case-insensitively
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
-  // ✅ Plain password check
+
+    // ✅ Plain password check (should later be replaced by bcrypt)
     if (user.password !== password) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
-  
-    // generate token
+
+    // ✅ Restrict access for admin/gym
+    if (user.userRole === "admin" || user.userRole === "gym") {
+      return res.status(403).json({ message: "Access denied. You are not a member" });
+    }
+
+    // ✅ Generate JWT
     const token = jwt.sign(
       { id: user._id, userRole: user.userRole },
       process.env.SECRET_JWT,
       { expiresIn: "7d" }
     );
- if(user.userRole === 'admin' || user.userRole === 'gym'){
-  return res.status(403).json({ message: "Access denied. you are not a member" });
-}
 
     res.status(200).json({
-      message: "Login successful",
       success: true,
+      message: "Login successful",
       token,
       user: {
         userId: user._id,
         name: user.name,
         email: user.email,
         userRole: user.userRole,
-      }
+      },
     });
   } catch (error) {
     console.error("Login Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
+
 export const adminLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
     }
+    const normalizedEmail = email.trim().toLowerCase();
 
     // find user in User collection
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email:normalizedEmail });
     if (!user) {
       return res.status(400).json({ message: "Invalid email or password" });
     }

@@ -270,3 +270,46 @@ export const userRegistorByAdmin = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
+export const resendOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const tempUser = req.app.locals.tempOtpStore?.[email];
+
+    if (!tempUser) {
+      return res.status(400).json({
+        success: false,
+        message: "No OTP request found. Please register first.",
+      });
+    }
+
+    // Generate new OTP
+    const newOtp = generateOtp();
+    const newExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+    // Update temp store
+    req.app.locals.tempOtpStore[email] = {
+      ...tempUser,
+      otp: newOtp,
+      expiry: newExpiry,
+    };
+
+    // Send OTP email
+    await sendOtpEmail(email, newOtp);
+
+    return res.json({
+      success: true,
+      message: "New OTP sent. Valid for 5 minutes.",
+      otpExpiry: newExpiry,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

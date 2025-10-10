@@ -35,6 +35,7 @@ import {
   addPendingPayment,
   getAllFeeCollections,
 } from "../controller/feesCollectionController/index.js";
+import { getReview } from "../controller/reviewController/index.js";
 const router = express.Router();
 
 router.put(
@@ -83,6 +84,7 @@ router.get("/list", getAllGymList);
 router.post("/edit-progress/:memberId", authMiddleware, editProgress);
 router.get("/get-fees-collection", authMiddleware, getAllFeeCollections);
 router.post("/add-pending-payment", authMiddleware, addPendingPayment);
+router.get("/get-review", authMiddleware, getReview);
 
 
 export default router;

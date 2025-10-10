@@ -519,9 +519,9 @@ export const updateGym = async (req, res) => {
 export const renewGymPlanByAdmin = async (req, res) => {
   try {
     const ownerId = req.user.id; // gym owner/admin
-    const { memberId, gymId, planId } = req.body; // frontend se pass
+    const { memberId, planId } = req.body; // frontend se pass
 
-    if (!memberId || !gymId || !planId) {
+    if (!memberId  || !planId) {
       return res.status(400).json({
         success: false,
         message: "memberId, gymId, and planId are required",
@@ -529,7 +529,7 @@ export const renewGymPlanByAdmin = async (req, res) => {
     }
 
     // 1️⃣ Check gym ownership
-    const ownerGym = await Gym.findOne({ user: ownerId, _id: gymId });
+    const ownerGym = await Gym.findOne({ user: ownerId });
     if (!ownerGym) {
       return res.status(403).json({
         success: false,
@@ -548,7 +548,7 @@ export const renewGymPlanByAdmin = async (req, res) => {
 
     // 3️⃣ Validate plan
     const gymPlan = await GymPlan.findOne({
-      gymId,
+      gymId:ownerGym._id,
       _id: planId,
     }).populate("planId", "name durationInMonths");
 
@@ -560,7 +560,7 @@ export const renewGymPlanByAdmin = async (req, res) => {
     }
 
     // 4️⃣ Expire current active plan (currentGym + history)
-    if (member.currentGym?.gym?.toString() === gymId.toString()) {
+    if (member.currentGym?.gym?.toString() === ownerGym._id.toString()) {
       // expire currentGym
       member.currentGym.status = "expired";
 
@@ -568,7 +568,7 @@ export const renewGymPlanByAdmin = async (req, res) => {
       await MembershipHistory.updateMany(
         {
           member: member._id,
-          gym: gymId,
+          gym: ownerGym._id,
           status: "active",
         },
         { $set: { status: "expired" } }
@@ -583,7 +583,7 @@ export const renewGymPlanByAdmin = async (req, res) => {
 
     // 6️⃣ Update currentGym
     member.currentGym = {
-      gym: gymId,
+      gym: ownerGym._id,
       plan: planId,
       membership_start: startDate,
       membership_end: endDate,
@@ -596,7 +596,7 @@ export const renewGymPlanByAdmin = async (req, res) => {
     // 7️⃣ Add new record to MembershipHistory
     await MembershipHistory.create({
       member: member._id,
-      gym: gymId,
+      gym: ownerGym._id,
       plan: planId,
       membership_start: startDate,
       membership_end: endDate,
@@ -608,7 +608,7 @@ export const renewGymPlanByAdmin = async (req, res) => {
       message: `✅ Plan renewed successfully for member ${member._id}`,
       data: {
         memberId: member._id,
-        gymId,
+        gymId:ownerGym._id,
         planName: gymPlan.planId.name,
         membership_start: startDate,
         membership_end: endDate,
