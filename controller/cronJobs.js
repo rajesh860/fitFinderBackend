@@ -82,6 +82,36 @@ export const markAbsentMembers = async () => {
     const startOfDay = dayjs().startOf("day").toDate();
     const endOfDay = dayjs().endOf("day").toDate();
 
+    // ✅ 1a. Check if today is Sunday (0 = Sunday)
+    const todayDay = dayjs().day(); 
+    if (todayDay === 0) {
+      console.log("🌞 Today is Sunday — marking all active members as present.");
+
+      const activeMembers = await Member.find({
+        "currentGym.status": "active",
+        "currentGym.gym": { $ne: null },
+      }).populate("currentGym.gym");
+
+      if (activeMembers.length) {
+        const presentRecords = activeMembers.map((member) => ({
+          insertOne: {
+            document: {
+              member: member._id,
+              gym: member.currentGym.gym, // required field
+              date: startOfDay, // store only date (start of day)
+              status: "present",
+              createdAt: new Date(),
+            },
+          },
+        }));
+
+        await Attendance.bulkWrite(presentRecords);
+        console.log(`✅ Marked ${presentRecords.length} members as present (Sunday).`);
+      }
+
+      return; // skip the rest of the absent logic
+    }
+
     // ✅ 2. Get all active members (with active currentGym)
     const activeMembers = await Member.find({
       "currentGym.status": "active",
@@ -140,6 +170,8 @@ export const markAbsentMembers = async () => {
     console.error("❌ Error in marking absent members:", err);
   }
 };
+
+
 
 // -----------------------------
 // Cron job
