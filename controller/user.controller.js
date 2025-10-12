@@ -1050,7 +1050,7 @@ export const enquiryCancelled = async (req, res) => {
 export const getMembershipHistory = async (req, res) => {
   try {
     const { gymId, memberId } = req.query;
-
+// console.log(gymId,"vhbjnm")
     // 🔹 gymId mandatory
     if (!gymId) {
       return res.status(400).json({
@@ -1079,7 +1079,7 @@ export const getMembershipHistory = async (req, res) => {
     }
 
     // 🔹 Fetch member
-    const member = await Member.findById(targetMemberId);
+    const member = await Member.findOne({user:targetMemberId});
     if (!member) {
       return res
         .status(404)
@@ -1088,7 +1088,7 @@ export const getMembershipHistory = async (req, res) => {
 
     // 🔹 Fetch membership history for the gym
     const history = await MembershipHistory.find({
-      member: targetMemberId,
+      member: member?._id,
       gym: gymId,
     })
       .populate("gym", "gymName")

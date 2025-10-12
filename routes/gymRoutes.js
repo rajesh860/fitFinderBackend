@@ -84,7 +84,7 @@ router.get("/list", getAllGymList);
 router.post("/edit-progress/:memberId", authMiddleware, editProgress);
 router.get("/get-fees-collection", authMiddleware, getAllFeeCollections);
 router.post("/add-pending-payment", authMiddleware, addPendingPayment);
-router.get("/get-review", authMiddleware, getReview);
+router.get("/get-review/:gymId", authMiddleware, getReview);
 
 
 export default router;

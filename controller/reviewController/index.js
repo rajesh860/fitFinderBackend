@@ -78,7 +78,7 @@ export const addOrUpdateReview = async (req, res) => {
 
 export const getReview = async (req,res)=>{
   try{
-    const {gymId} = req.body
+    const {gymId} = req.params
     if(!gymId){
       return res.status(400).json({
         success: false,

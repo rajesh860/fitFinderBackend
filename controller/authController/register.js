@@ -32,7 +32,7 @@ export const requestOtp = async (req, res) => {
 
     // 🔢 Generate OTP
     const otp = generateOtp();
-    const expiry = Date.now() + 5 * 60 * 1000; // 5 minutes
+    const expiry = Date.now() + 1 * 60 * 1000; // 5 minutes
 
     // 🧠 Store OTP and user data in temporary memory
     req.app.locals.tempOtpStore = req.app.locals.tempOtpStore || {};
@@ -285,7 +285,6 @@ export const resendOtp = async (req, res) => {
   try {
     const { email } = req.body;
     const tempUser = req.app.locals.tempOtpStore?.[email];
-
     if (!tempUser) {
       return res.status(400).json({
         success: false,
@@ -295,7 +294,7 @@ export const resendOtp = async (req, res) => {
 
     // Generate new OTP
     const newOtp = generateOtp();
-    const newExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes
+    const newExpiry = Date.now() + 1 * 60 * 1000; // 5 minutes
 
     // Update temp store
     req.app.locals.tempOtpStore[email] = {

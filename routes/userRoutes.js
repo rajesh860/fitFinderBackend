@@ -31,7 +31,7 @@ router.get("/get-attendence/:gymId", authMiddleware, getUserAttendence);
 router.get("/get-progress/:gymId", authMiddleware, getUserProgressByGym);
 
 router.get("/get-gym-history", authMiddleware, getUserGymHistory);
-router.post("/get-plan-history", authMiddleware, getMembershipHistory);
+router.get("/get-plan-history", authMiddleware, getMembershipHistory);
 
 router.get("/list", authMiddleware, getActiveGymMembers);
 
