@@ -1077,9 +1077,10 @@ export const getMembershipHistory = async (req, res) => {
         .status(403)
         .json({ success: false, message: "Not authorized" });
     }
+    console.log(targetMemberId,req.user,"targetMemberId")
 
     // 🔹 Fetch member
-    const member = await Member.findOne({user:targetMemberId});
+    const member = await Member.findOne({_id:targetMemberId});
     if (!member) {
       return res
         .status(404)
