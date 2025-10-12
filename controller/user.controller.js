@@ -1080,7 +1080,9 @@ export const getMembershipHistory = async (req, res) => {
     console.log(targetMemberId,req.user,"targetMemberId")
 
     // 🔹 Fetch member
-    const member = await Member.findOne({_id:targetMemberId});
+    const checkUserRole = req.user.userRole === "member"
+    const para = checkUserRole?{user:targetMemberId }:{_id:targetMemberId}
+    const member = await Member.findOne(para);
     if (!member) {
       return res
         .status(404)
