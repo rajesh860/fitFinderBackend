@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 const GymSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+trainers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Trainer" }],
 
   gymName: { type: String, default: "" },
   contact: { type: String, default: "" },

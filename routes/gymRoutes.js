@@ -36,6 +36,7 @@ import {
   getAllFeeCollections,
 } from "../controller/feesCollectionController/index.js";
 import { getReview } from "../controller/reviewController/index.js";
+import {trainerList} from "../controller/trainerController/trainerlist.js"
 const router = express.Router();
 
 router.put(
@@ -82,9 +83,14 @@ router.post("/add-progress/:memberId", authMiddleware, addProgressUserByGym);
 router.get("/get-progress/:memberId", authMiddleware, getProgressUserOfGym);
 router.get("/list", getAllGymList);
 router.post("/edit-progress/:memberId", authMiddleware, editProgress);
+
 router.get("/get-fees-collection", authMiddleware, getAllFeeCollections);
+
 router.post("/add-pending-payment", authMiddleware, addPendingPayment);
 router.get("/get-review/:gymId", authMiddleware, getReview);
+
+router.get("/get-trainer-list", authMiddleware, trainerList);
+
 
 
 export default router;

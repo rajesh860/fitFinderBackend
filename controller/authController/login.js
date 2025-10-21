@@ -98,3 +98,38 @@ export const adminLogin = async (req, res) => {
     res.status(500).json({ message: "Server Error" });
   }
 };
+
+
+
+
+
+
+export const demoLogin = async (req, res) => {
+  try {
+    // Fixed demo user credentials
+    console.log("hit")
+    const demoEmail = "demo@example.com";
+    const demoUser = await User.findOne({ email: demoEmail }).select("-password");
+
+    if (!demoUser) {
+      return res.status(404).json({ success: false, message: "Demo user not found" });
+    }
+
+    // Generate JWT
+    const token = jwt.sign(
+      { id: demoUser._id, email: demoUser.email },
+      process.env.SECRET_JWT,
+      { expiresIn: "7d" }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Demo login successful",
+      user: demoUser,
+      token,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};

@@ -2,6 +2,17 @@ import feesCollectionModel from "../../models/feesCollection.model.js";
 
 export const getAllFeeCollections = async (req, res) => {
   try {
+    // ✅ Get filter from query params
+    const { fee_status } = req.query;
+
+    // Build the query
+    let query = {};
+    if (fee_status) {
+      // Filter by member's fee_status
+      query["member.fee_status"] = fee_status;
+    }
+
+    // Fetch collections with population
     const collections = await feesCollectionModel
       .find()
       .populate({
@@ -13,30 +24,40 @@ export const getAllFeeCollections = async (req, res) => {
       })
       .populate("gym", "name location");
 
-    if (!collections || collections.length === 0) {
-      return res.status(404).json({
+    // If fee_status filter exists, filter after population
+    let filteredCollections = collections;
+    if (fee_status) {
+      filteredCollections = collections.filter(
+        (c) => c.member?.fee_status === fee_status
+      );
+    }
+
+    if (!filteredCollections || filteredCollections.length === 0) {
+      return res.status(200).json({
         success: false,
         message: "No fee collection found",
+        data:[],
+         summary: { totalFees, totalCollection, totalPending },
       });
     }
 
     // Summary
-    const totalFees = collections.reduce(
+    const totalFees = filteredCollections.reduce(
       (sum, item) => sum + item.totalAmount,
       0
     );
-    const totalCollection = collections.reduce(
+    const totalCollection = filteredCollections.reduce(
       (sum, item) => sum + item.paidAmount,
       0
     );
-    const totalPending = collections.reduce(
+    const totalPending = filteredCollections.reduce(
       (sum, item) => sum + item.pendingAmount,
       0
     );
 
     res.status(200).json({
       success: true,
-      data: collections,
+      data: filteredCollections,
       summary: { totalFees, totalCollection, totalPending },
     });
   } catch (err) {
@@ -48,6 +69,7 @@ export const getAllFeeCollections = async (req, res) => {
     });
   }
 };
+
 
 export const addPendingPayment = async (req, res) => {
   try {

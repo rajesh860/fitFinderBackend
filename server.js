@@ -5,6 +5,7 @@ import gymRoutes from "./routes/gymRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import trainerRoutes from "./routes/trainerRoutes.js";
 import {
   // backfillAllMembersAbsentAttendance,
   dailyCronJobs,
@@ -31,6 +32,7 @@ app.use("/auth", authRoutes); // Login endpoint here
 app.use("/admin", adminRoutes);
 app.use("/gym", gymRoutes);
 app.use("/user", userRoutes);
+app.use("/trainer", trainerRoutes);
 // markAbsentMembers()
 dailyCronJobs();
 // Har month ke 1st date 00:00 AM pe run hoga

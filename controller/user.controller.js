@@ -107,7 +107,7 @@ export const findSignalUser = async (req, res) => {
     //   // date: { $gte: todayStart, $lte: todayEnd },
     // }).populate("gym", "gymName") // Gym ka naam bhi populate kar sakte ho
     //   .sort({ date: -1 }).lean();
-        const userProfile2 = await Member.findOne({ user: id })
+        // const userProfile2 = await Member.findOne({ user: id })
     if (!userProfile) {
       return res.status(404).json({ message: "User not found" });
     }

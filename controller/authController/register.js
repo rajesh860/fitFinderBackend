@@ -7,7 +7,7 @@ import { GymPlan } from "../../models/planSchema.js";
 import dayjs from "dayjs";
 import MembershipHistory from "../../models/planHistroy.model.js";
 import feesCollectionModel from "../../models/feesCollection.model.js";
-
+import Trainer from "../../models/trainer.model.js"
 export const requestOtp = async (req, res) => {
   try {
     const { name, email, phone, password, userRole, gymName } = req.body;
@@ -133,7 +133,7 @@ export const verifyOtp = async (req, res) => {
   }
 };
 
-export const userRegistorByAdmin = async (req, res) => {
+export const userRegisterByAdmin = async (req, res) => {
   try {
     const {
       name,
@@ -314,5 +314,56 @@ export const resendOtp = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
+
+
+
+
+export const registerTrainer = async (req, res) => {
+  try {
+    const gymId = req.user?.id || null; // agar available nahi to null
+    const { name, email, phone, password, specialization, experience, bio, photo, userRole } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, message: "Name, Email and Password are required" });
+    }
+
+    // ✅ Check if user exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: "Email already registered" });
+    }
+
+    // ✅ Create User (plain password)
+    const newUser = await User.create({
+      name,
+      email,
+      phone,
+      password,
+      userRole,
+      status: "active",
+    });
+
+    // ✅ Create Trainer linked to User
+    const newTrainer = await Trainer.create({
+      user: newUser._id,
+      specialization: specialization || [],
+      experience: experience || 0,
+      bio: bio || "",
+      photo: photo || "",
+      gyms: gymId ? [gymId] : [], // agar gymId hai to array me add, nahi to empty array
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Trainer registered successfully",
+      data: { user: newUser, trainer: newTrainer },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 };

@@ -18,6 +18,7 @@ const CurrentMembershipSchema = new mongoose.Schema({
     enum: ["active", "expired", "removed"],
     default: "active",
   },
+   trainers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Trainer" }], // ✅ Add this
 });
 const MemberSchema = new mongoose.Schema(
   {

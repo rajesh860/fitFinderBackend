@@ -15,6 +15,7 @@ import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import ReviewModel from "../models/review.model.js";
 import mongoose from "mongoose";
+import {deleteFileFromS3} from "../utils/s3Service.js"
 import GymBooking from "../models/gymBooking.model.js";
 export const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -455,36 +456,45 @@ export const updateGym = async (req, res) => {
   try {
     const gymId = req.params.id;
 
-    // Pehle current gym data uthao
+    // Fetch current gym data
     const existingGym = await Gym.findById(gymId);
     if (!existingGym) {
       return res.status(404).json({ success: false, message: "Gym not found" });
     }
 
-    const updateData = { ...req.body }; // normal fields
+    const updateData = { ...req.body };
 
     // ✅ Handle file uploads
     if (req.files) {
-      // Owner image (single)
-      if (req.files.owner_image && req.files.owner_image.length > 0) {
+      // 🧩 Owner image
+      if (req.files.owner_image?.length > 0) {
+        // Delete old one if exists
+        if (existingGym.owner_image) {
+          await deleteFileFromS3(existingGym.owner_image);
+        }
         updateData.owner_image = req.files.owner_image[0].key;
       }
-
-      // Cover image (single)
-      if (req.files.coverImage && req.files.coverImage.length > 0) {
-        updateData.coverImage = req.files.coverImage[0].key; // maxCount=1
+      
+      // 🧩 Cover image
+      if (req.files.coverImage?.length > 0) {
+        // Delete old cover image from S3 first
+        if (existingGym.coverImage) {
+          console.log(existingGym.coverImage,"coverImage")
+          await deleteFileFromS3(existingGym.coverImage);
+        }
+        updateData.coverImage = req.files.coverImage[0].key; // replace, not merge
       }
 
-      // Gallery images (multiple)
-      if (req.files.images && req.files.images.length > 0) {
-        // const newGalleryImages = req.files.images.map((f) => f.key);
-
-        // Merge existing images with new ones
-      updateData.images = [...(existingGym.images || []), ...req.files.images.map(f => f.key)];
+      // 🧩 Gallery images (add new to existing)
+      if (req.files.images?.length > 0) {
+        updateData.images = [
+          ...(existingGym.images || []),
+          ...req.files.images.map((f) => f.key),
+        ];
       }
 
-      // Gym Certificates (multiple)
-      if (req.files.gymCertificates && req.files.gymCertificates.length > 0) {
+      // 🧩 Gym certificates (replace)
+      if (req.files.gymCertificates?.length > 0) {
         updateData.gymCertificates = req.files.gymCertificates.map((f) => f.key);
       }
     }
@@ -507,17 +517,16 @@ export const updateGym = async (req, res) => {
       };
     }
 
-    // ✅ Update gym
-    const updatedGym = await Gym.findByIdAndUpdate(gymId, updateData, { new: true });
+    // ✅ Update gym in DB
+    await Gym.findByIdAndUpdate(gymId, updateData, { new: true });
 
     res.json({
       success: true,
       message: "Gym updated successfully",
-      // data: updatedGym
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server Error" });
+    console.error("Error updating gym:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 };
 
