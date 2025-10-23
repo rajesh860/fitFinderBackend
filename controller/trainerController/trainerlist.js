@@ -25,13 +25,10 @@ export const trainerList  = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 }
-export const getAllTrainerList  = async (req, res) => {
+export const getAllTrainerList = async (req, res) => {
   try {
-    // 👇 Assume gym id is passed as query OR get from logged-in user
-  
+   
 
-
-    // Fetch trainers who belong to this gym
     const trainers = await Trainer.find()
       .populate("user", "name email phone")
       .populate("gyms", "name location");
@@ -40,13 +37,26 @@ export const getAllTrainerList  = async (req, res) => {
       return res.status(404).json({ success: false, message: "No trainers found" });
     }
 
-    res.json({ success: true, data: trainers });
+    // Generate presigned URLs for each trainer's photo
+    const trainersWithPhotos = await Promise.all(
+      trainers.map(async (trainer) => {
+        let photoUrl = null;
+        if (trainer.photo) {
+          photoUrl = await getPresignedUrl(trainer.photo); // assuming photo is single string
+        }
+        return {
+          ...trainer.toObject(), // convert mongoose doc to plain object
+          photo: photoUrl,
+        };
+      })
+    );
+
+    res.json({ success: true, data: trainersWithPhotos });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
-}
-
+};
 
 
 export const getTrainerProfile = async (req, res) => {
