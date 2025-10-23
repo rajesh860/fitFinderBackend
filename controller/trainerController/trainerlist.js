@@ -42,7 +42,7 @@ export const getAllTrainerList = async (req, res) => {
       trainers.map(async (trainer) => {
         let photoUrl = null;
         if (trainer.photo) {
-          photoUrl = await getPresignedUrl(trainer.photo); // assuming photo is single string
+          photoUrl = await getPresignedUrl(trainer.photo[0]); // assuming photo is single string
         }
         return {
           ...trainer.toObject(), // convert mongoose doc to plain object
