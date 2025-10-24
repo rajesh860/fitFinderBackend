@@ -4,6 +4,7 @@ import Progress from "../../models/progess.model.js";
 import {GymHistory} from "../../models/gymHistory.model.js";
 import Member from "../../models/member.model.js";
 import Gym from "../../models/gym.model.js";
+import mongoose from "mongoose";
 // Create Plan
 export const createPlan = async (req, res) => {
   try {
@@ -243,3 +244,46 @@ export const buyPlan = async (req, res) => {
 };
 
 
+
+
+
+
+export const getPlanDetail = async (req, res) => {
+  try {
+    const { gymPlanId } = req.params; // ya query me bhej sakte ho
+
+    if (!mongoose.Types.ObjectId.isValid(gymPlanId)) {
+      return res.status(400).json({ success: false, message: "Invalid GymPlan ID" });
+    }
+
+    // GymPlan fetch with Plan + Gym details
+    const gymPlan = await GymPlan.findOne({planId:gymPlanId})
+      .populate("planId", "name") // Plan details
+      .populate("gymId", "gymName contact location images avgRating"); // Gym details
+
+    if (!gymPlan) {
+      return res.status(404).json({ success: false, message: "Plan not found" });
+    }
+
+    // Format response
+    const planDetail = {
+      planName: gymPlan.planId.name,
+      price: gymPlan.price,
+      duration: gymPlan.durationInMonths,
+      features: gymPlan.features || [],
+      gym: {
+        name: gymPlan.gymId.gymName,
+        contact: gymPlan.gymId.contact,
+        location: gymPlan.gymId.location,
+        images: gymPlan.gymId.images,
+        avgRating: gymPlan.gymId.avgRating || 0,
+      },
+      createdAt: gymPlan.created_at,
+    };
+
+    res.status(200).json({ success: true, data: planDetail });
+  } catch (error) {
+    console.error("Plan Detail Error:", error);
+    res.status(500).json({ success: false, message: "Server Error", error: error.message });
+  }
+};

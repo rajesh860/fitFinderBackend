@@ -1108,3 +1108,173 @@ export const getMembershipHistory = async (req, res) => {
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+
+
+
+
+
+export const getClientDashboard = async (req, res) => {
+  try {
+    console.log("Dashboard API Hit ✅");
+
+    const { id } = req.user; // userId from token
+
+    // ✅ Populate full gym details + status included
+    const user = await Member.findOne({ user: id })
+      .populate("user", "name email userRole")
+      .populate({
+        path: "currentGym.gym",
+        model: "Gym",
+        select: "gymName images avgRating location contact",
+      })
+      .populate({
+        path: "currentGym.plan",
+        select: "name durationDays",
+      });
+
+    if (!user)
+      return res.status(404).json({ success: false, message: "User not found" });
+
+    if (user.user.userRole !== "member" && user.user.userRole !== "demo")
+      return res
+        .status(403)
+        .json({ success: false, message: "Access denied: Not a member" });
+
+    // 🔹 Attendance
+    const allAttendance = await Attendance.find({ member: user._id }).sort({
+      date: -1,
+    });
+    const totalDays = allAttendance.length;
+    const presentDays = allAttendance.filter(
+      (a) => a.status === "present"
+    ).length;
+    const today = new Date().setHours(0, 0, 0, 0);
+    const presentToday = allAttendance.some(
+      (a) =>
+        new Date(a.date).setHours(0, 0, 0, 0) === today &&
+        a.status === "present"
+    );
+
+    // 🔹 Calculate Streak
+    let streakDays = 0;
+    for (let i = 0; i < allAttendance.length; i++) {
+      const current = new Date(allAttendance[i].date).setHours(0, 0, 0, 0);
+      const compareDate = new Date(
+        today - streakDays * 24 * 60 * 60 * 1000
+      ).setHours(0, 0, 0, 0);
+      if (current === compareDate && allAttendance[i].status === "present")
+        streakDays++;
+      else break;
+    }
+
+    // 🔹 Progress
+    const progress = await Progress.findOne({ member: user._id }).populate(
+      "gym",
+      "name"
+    );
+    let progressPercent = 0;
+
+    if (progress?.current?.weight && progress?.history?.length) {
+      const startWeight =
+        progress.history[0]?.weight || progress.current.weight;
+      const currentWeight = progress.current.weight;
+      const targetWeight = progress.current.targetWeight || currentWeight - 5;
+
+      if (startWeight !== targetWeight) {
+        progressPercent = Math.min(
+          100,
+          Math.round(
+            ((startWeight - currentWeight) / (startWeight - targetWeight)) * 100
+          )
+        );
+      }
+    }
+
+    const bodyMeasurements = {
+      chest: progress?.current?.chest || null,
+      weight: progress?.current?.weight || null,
+      height: progress?.current?.height || null,
+      biceps: progress?.current?.arm || null,
+      thigh: progress?.current?.thigh || null,
+    };
+
+    // 🔹 Current Plan + Gym Details (status included)
+    const currentGym = user.currentGym;
+    let planData = null;
+
+    if (currentGym?.plan) {
+      const membershipStart = new Date(currentGym.membership_start);
+      const membershipEnd = new Date(currentGym.membership_end);
+      const todayDate = new Date();
+
+      const totalPlanDays = Math.ceil(
+        (membershipEnd.getTime() - membershipStart.getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+      const daysLeft = Math.max(
+        0,
+        Math.ceil(
+          (membershipEnd.getTime() - todayDate.getTime()) /
+            (1000 * 60 * 60 * 24)
+        )
+      );
+
+      planData = {
+        name: currentGym.plan.name,
+        totalDays: totalPlanDays,
+        daysLeft,
+       planId:currentGym.plan?._id,
+        gymDetails: {
+           status: currentGym.status || "inactive", // ✅ included here
+          name: currentGym.gym?.gymName || "N/A",
+          contact: currentGym.gym?.contact || "N/A",
+          avgRating: currentGym.gym?.avgRating || 0,
+          totalReviews: currentGym.gym?.totalReviews || 0,
+          location: currentGym.gym?.location || null,
+          images: currentGym.gym?.images || [],
+        },
+      };
+    }
+
+    // 🔹 Tip of the Day
+    const tips = [
+      "Stay consistent — even small efforts count!",
+      "Progress over perfection 💪",
+      "Fuel your body, not your excuses.",
+      "You’re stronger than you think!",
+    ];
+    const tip = tips[Math.floor(Math.random() * tips.length)];
+
+    // ✅ Final Response
+    res.status(200).json({
+      success: true,
+      data: {
+        memberName: user.user.name,
+        memberId: user._id,
+        attendance: {
+          total: totalDays,
+          present: presentDays,
+          presentToday,
+          streakDays,
+        },
+        progress: {
+          percent: progressPercent,
+          goal: progress?.goal || "Muscle Gain",
+          currentWeight: progress?.current?.weight || null,
+          targetWeight: progress?.current?.targetWeight || null,
+          ...bodyMeasurements,
+        },
+        plan: planData,
+        tip,
+      },
+    });
+  } catch (error) {
+    console.error("Dashboard error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
+    });
+  }
+};
+

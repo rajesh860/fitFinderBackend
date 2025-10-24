@@ -4,6 +4,7 @@ import {
   enquiryCancelled,
   findSignalUser,
   getActiveGymMembers,
+  getClientDashboard,
   getMembershipHistory,
   getUserAttendence,
   getUserGymEnquiry,
@@ -15,7 +16,7 @@ import {
 } from "../controller/user.controller.js";
 import { uploadMiddleware } from "../middleware/upload.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
-import { buyPlan } from "../controller/plan/plan.js";
+import { buyPlan, getPlanDetail } from "../controller/plan/plan.js";
 // import { markAttendance } from "../controller/userController/index.js";
 import { scanGymQR } from "../controller/qrController/index.js";
 import { getMemberAttendance } from "../controller/gymController/index.js";
@@ -53,5 +54,7 @@ router.put(
   uploadMiddleware(["photo"]),
   updateUserProfile
 );
+router.get("/dashboard", authMiddleware, getClientDashboard);
+router.get("/plain-detail/:gymPlanId", authMiddleware, getPlanDetail);
 
 export default router;
