@@ -197,7 +197,6 @@ export const getAllGymList = async (req, res) => {
       lng,
       maxDistance,
     } = req.query;
-
     const pageNumber = parseInt(page, 10) || 1;
     const limitNumber = parseInt(limit, 10) || 3;
 
@@ -479,7 +478,6 @@ export const updateGym = async (req, res) => {
       if (req.files.coverImage?.length > 0) {
         // Delete old cover image from S3 first
         if (existingGym.coverImage) {
-          console.log(existingGym.coverImage,"coverImage")
           await deleteFileFromS3(existingGym.coverImage);
         }
         updateData.coverImage = req.files.coverImage[0].key; // replace, not merge
@@ -657,7 +655,6 @@ export const deleteGalleryImage = async (req, res) => {
     
     // Build the exact path stored in DB
     const key = `uploads/${decodeURIComponent(imageKey)}`; 
-    console.log("Deleting image:", key);
     const command = new DeleteObjectCommand({
       Bucket: "fitcrewimages", // ya "fitcrewimages"
       Key: key, // example: uploads/1759923520091-998045494-WhatsApp%20Image...
@@ -682,7 +679,6 @@ export const deleteGalleryImage = async (req, res) => {
       return res.status(404).json({ success: false, message: "Gym not found" });
     }
 
-    console.log("Updated images:", updatedGym.images);
 
     return res.json({
       success: true,

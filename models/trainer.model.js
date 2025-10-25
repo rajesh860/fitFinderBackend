@@ -45,26 +45,50 @@ const TrainerSchema = new mongoose.Schema(
     ],
 
     // 🔹 Booked Slots
-    bookings: [
+  bookings: [
+  {
+    client: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    type: { type: String, enum: ["personal", "gym"], required: true },
+    
+    // 📅 User books for a full month
+    month: { type: Number, required: true }, // e.g. 10 for October
+    year: { type: Number, required: true }, // e.g. 2025
+
+    // 🕒 Chosen time slot (1 hour per day)
+    timeSlot: {
+      startTime: { type: String, required: true }, // "05:00"
+      endTime: { type: String, required: true },   // "06:00"
+    },
+
+    // ✅ Optional: days user wants to attend
+    days: [
       {
-        client: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-        type: { type: String, enum: ["personal", "gym"], required: true },
-        dateRange: {
-          startDate: { type: Date, required: true },
-          endDate: { type: Date, required: true },
-        },
-        timeSlot: {
-          startTime: { type: String, required: true },
-          endTime: { type: String, required: true },
-        },
-        gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
-        status: {
+        day: {
           type: String,
-          enum: ["active", "cancelled", "completed"],
-          default: "active",
+          enum: [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+          ],
         },
+        active: { type: Boolean, default: true },
       },
     ],
+
+    // 📍 Gym Reference (optional)
+    gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
+
+    status: {
+      type: String,
+      enum: ["active", "cancelled", "completed"],
+      default: "active",
+    },
+  },
+],
   },
   { timestamps: true }
 );

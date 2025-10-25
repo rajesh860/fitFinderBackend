@@ -16,6 +16,7 @@ import feesCollectionModel from "../models/feesCollection.model.js";
 import { getPresignedUrl } from "../middleware/presigned.js";
 import { s3 } from "../config/s3.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import ReviewModel from "../models/review.model.js";
 dotenv.config(); // load env variables
 
 // Example controller function
@@ -1077,7 +1078,6 @@ export const getMembershipHistory = async (req, res) => {
         .status(403)
         .json({ success: false, message: "Not authorized" });
     }
-    console.log(targetMemberId,req.user,"targetMemberId")
 
     // 🔹 Fetch member
     const checkUserRole = req.user.userRole === "member"
@@ -1115,17 +1115,15 @@ export const getMembershipHistory = async (req, res) => {
 
 export const getClientDashboard = async (req, res) => {
   try {
-    console.log("Dashboard API Hit ✅");
 
     const { id } = req.user; // userId from token
 
-    // ✅ Populate full gym details + status included
     const user = await Member.findOne({ user: id })
       .populate("user", "name email userRole")
       .populate({
         path: "currentGym.gym",
         model: "Gym",
-        select: "gymName images avgRating location contact",
+        select: "gymName images location contact",
       })
       .populate({
         path: "currentGym.plan",
@@ -1135,58 +1133,34 @@ export const getClientDashboard = async (req, res) => {
     if (!user)
       return res.status(404).json({ success: false, message: "User not found" });
 
-    if (user.user.userRole !== "member" && user.user.userRole !== "demo")
-      return res
-        .status(403)
-        .json({ success: false, message: "Access denied: Not a member" });
+    if (!["member", "demo"].includes(user.user.userRole))
+      return res.status(403).json({ success: false, message: "Access denied: Not a member" });
 
     // 🔹 Attendance
-    const allAttendance = await Attendance.find({ member: user._id }).sort({
-      date: -1,
-    });
+    const allAttendance = await Attendance.find({ member: user._id }).sort({ date: -1 });
     const totalDays = allAttendance.length;
-    const presentDays = allAttendance.filter(
-      (a) => a.status === "present"
-    ).length;
+    const presentDays = allAttendance.filter(a => a.status === "present").length;
     const today = new Date().setHours(0, 0, 0, 0);
-    const presentToday = allAttendance.some(
-      (a) =>
-        new Date(a.date).setHours(0, 0, 0, 0) === today &&
-        a.status === "present"
-    );
+    const presentToday = allAttendance.some(a => new Date(a.date).setHours(0,0,0,0) === today && a.status === "present");
 
-    // 🔹 Calculate Streak
+    // 🔹 Streak
     let streakDays = 0;
     for (let i = 0; i < allAttendance.length; i++) {
-      const current = new Date(allAttendance[i].date).setHours(0, 0, 0, 0);
-      const compareDate = new Date(
-        today - streakDays * 24 * 60 * 60 * 1000
-      ).setHours(0, 0, 0, 0);
-      if (current === compareDate && allAttendance[i].status === "present")
-        streakDays++;
+      const current = new Date(allAttendance[i].date).setHours(0,0,0,0);
+      const compareDate = new Date(today - streakDays * 24 * 60 * 60 * 1000).setHours(0,0,0,0);
+      if (current === compareDate && allAttendance[i].status === "present") streakDays++;
       else break;
     }
 
     // 🔹 Progress
-    const progress = await Progress.findOne({ member: user._id }).populate(
-      "gym",
-      "name"
-    );
+    const progress = await Progress.findOne({ member: user._id });
     let progressPercent = 0;
-
     if (progress?.current?.weight && progress?.history?.length) {
-      const startWeight =
-        progress.history[0]?.weight || progress.current.weight;
+      const startWeight = progress.history[0]?.weight || progress.current.weight;
       const currentWeight = progress.current.weight;
       const targetWeight = progress.current.targetWeight || currentWeight - 5;
-
       if (startWeight !== targetWeight) {
-        progressPercent = Math.min(
-          100,
-          Math.round(
-            ((startWeight - currentWeight) / (startWeight - targetWeight)) * 100
-          )
-        );
+        progressPercent = Math.min(100, Math.round(((startWeight - currentWeight)/(startWeight - targetWeight)) * 100));
       }
     }
 
@@ -1198,38 +1172,40 @@ export const getClientDashboard = async (req, res) => {
       thigh: progress?.current?.thigh || null,
     };
 
-    // 🔹 Current Plan + Gym Details (status included)
+    // 🔹 Current Plan + Gym Details
     const currentGym = user.currentGym;
     let planData = null;
 
     if (currentGym?.plan) {
+      // calculate days left
       const membershipStart = new Date(currentGym.membership_start);
       const membershipEnd = new Date(currentGym.membership_end);
       const todayDate = new Date();
+      const totalPlanDays = Math.ceil((membershipEnd - membershipStart)/(1000*60*60*24));
+      const daysLeft = Math.max(0, Math.ceil((membershipEnd - todayDate)/(1000*60*60*24)));
 
-      const totalPlanDays = Math.ceil(
-        (membershipEnd.getTime() - membershipStart.getTime()) /
-          (1000 * 60 * 60 * 24)
-      );
-      const daysLeft = Math.max(
-        0,
-        Math.ceil(
-          (membershipEnd.getTime() - todayDate.getTime()) /
-            (1000 * 60 * 60 * 24)
-        )
-      );
+      // 🔹 Calculate avgRating and totalReviews for this gym
+      let avgRating = 0, totalReviews = 0;
+      if (currentGym.gym?._id) {
+        const reviews = await ReviewModel.find({ gym: currentGym.gym._id });
+        totalReviews = reviews.length;
+        if (totalReviews > 0) {
+          const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+          avgRating = parseFloat((sum / totalReviews).toFixed(1));
+        }
+      }
 
       planData = {
         name: currentGym.plan.name,
         totalDays: totalPlanDays,
         daysLeft,
-       planId:currentGym.plan?._id,
+        planId: currentGym.plan._id,
         gymDetails: {
-           status: currentGym.status || "inactive", // ✅ included here
+          status: currentGym.status || "inactive",
           name: currentGym.gym?.gymName || "N/A",
           contact: currentGym.gym?.contact || "N/A",
-          avgRating: currentGym.gym?.avgRating || 0,
-          totalReviews: currentGym.gym?.totalReviews || 0,
+          avgRating,
+          totalReviews,
           location: currentGym.gym?.location || null,
           images: currentGym.gym?.images || [],
         },
@@ -1245,36 +1221,20 @@ export const getClientDashboard = async (req, res) => {
     ];
     const tip = tips[Math.floor(Math.random() * tips.length)];
 
-    // ✅ Final Response
+    // ✅ Response
     res.status(200).json({
       success: true,
       data: {
         memberName: user.user.name,
         memberId: user._id,
-        attendance: {
-          total: totalDays,
-          present: presentDays,
-          presentToday,
-          streakDays,
-        },
-        progress: {
-          percent: progressPercent,
-          goal: progress?.goal || "Muscle Gain",
-          currentWeight: progress?.current?.weight || null,
-          targetWeight: progress?.current?.targetWeight || null,
-          ...bodyMeasurements,
-        },
+        attendance: { total: totalDays, present: presentDays, presentToday, streakDays },
+        progress: { percent: progressPercent, goal: progress?.goal || "Muscle Gain", currentWeight: progress?.current?.weight, targetWeight: progress?.current?.targetWeight, ...bodyMeasurements },
         plan: planData,
         tip,
       },
     });
   } catch (error) {
     console.error("Dashboard error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Server Error", error: error.message });
   }
 };
-
