@@ -8,7 +8,9 @@ const TrainerSchema = new mongoose.Schema(
     experience: String,
     bio: String,
     photo: [String],
-    rating: { type: String, default: "0" },
+    // rating: { type: String, default: "0" },
+    averageRating: { type: Number, default: 0 },
+    totalReviews: { type: Number, default: 0 },
 
     // 🔹 Trainer’s general weekly availability
     availability: [
@@ -42,53 +44,44 @@ const TrainerSchema = new mongoose.Schema(
           endTime: String,
         },
       },
+
     ],
 
     // 🔹 Booked Slots
-  bookings: [
-  {
-    client: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    type: { type: String, enum: ["personal", "gym"], required: true },
-    
-    // 📅 User books for a full month
-    month: { type: Number, required: true }, // e.g. 10 for October
-    year: { type: Number, required: true }, // e.g. 2025
+ // 🧾 Simplified Bookings (monthly-based)
 
-    // 🕒 Chosen time slot (1 hour per day)
-    timeSlot: {
-      startTime: { type: String, required: true }, // "05:00"
-      endTime: { type: String, required: true },   // "06:00"
-    },
 
-    // ✅ Optional: days user wants to attend
-    days: [
+    // 🪙 Trainer Subscription Plans
+    plans: [
       {
-        day: {
-          type: String,
-          enum: [
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-            "Sunday",
-          ],
-        },
-        active: { type: Boolean, default: true },
+        name: { type: String, required: true }, // e.g. "1 Month Plan", "3 Month Plan"
+        durationMonths: { type: Number, required: true }, // e.g. 1, 3, 6
+        price: { type: Number, required: true }, // price in ₹ or $
+        description: { type: String },
+        benefits: [String], // e.g. ["Diet plan", "Weekly Progress Tracking"]
+        isActive: { type: Boolean, default: true },
+        createdAt: { type: Date, default: Date.now },
       },
     ],
-
-    // 📍 Gym Reference (optional)
-    gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
-
-    status: {
-      type: String,
-      enum: ["active", "cancelled", "completed"],
-      default: "active",
-    },
-  },
-],
+    bookings: [
+      {
+        client: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        type: { type: String, enum: ["personal", "gym"], required: true },
+        month: { type: Number, required: true }, // e.g. 10 = October
+        year: { type: Number, required: true },  // e.g. 2025
+        timeSlot: {
+          startTime: { type: String, required: true }, // e.g. "05:00"
+          endTime: { type: String, required: true },   // e.g. "06:00"
+        },
+        gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
+        status: {
+          type: String,
+          enum: ["active", "cancelled", "completed"],
+          default: "active",
+        },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );

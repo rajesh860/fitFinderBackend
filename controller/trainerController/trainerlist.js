@@ -1,5 +1,6 @@
 import { getPresignedUrl } from "../../middleware/presigned.js";
 import Trainer from "../../models/trainer.model.js";
+import TrainerReview from "../../models/trainerReview.js";
 
 export const trainerList  = async (req, res) => {
   try {
@@ -27,34 +28,61 @@ export const trainerList  = async (req, res) => {
 }
 export const getAllTrainerList = async (req, res) => {
   try {
-   
-
+    // 🧩 Fetch trainers and populate user name
     const trainers = await Trainer.find()
-      .populate("user", "name email phone")
-      .populate("gyms", "name location");
+      .populate("user", "name")
+      .select("bio photo user"); // only fetch necessary fields
 
     if (!trainers.length) {
-      return res.status(404).json({ success: false, message: "No trainers found" });
+      return res.status(404).json({
+        success: false,
+        message: "No trainers found",
+      });
     }
 
-    // Generate presigned URLs for each trainer's photo
-    const trainersWithPhotos = await Promise.all(
+    // 🧮 Process each trainer
+    const trainerList = await Promise.all(
       trainers.map(async (trainer) => {
+        // 🖼️ Generate presigned image
         let photoUrl = null;
-        if (trainer.photo) {
-          photoUrl = await getPresignedUrl(trainer.photo[0]); // assuming photo is single string
+        if (trainer.photo && trainer.photo.length > 0) {
+          photoUrl = await getPresignedUrl(trainer.photo[0]);
         }
+
+        // ⭐ Calculate rating info
+        const reviews = await TrainerReview.find({ trainer: trainer._id });
+        const totalRatings = reviews.reduce(
+          (sum, review) => sum + (review.rating || 0),
+          0
+        );
+        const averageRating =
+          reviews.length > 0
+            ? (totalRatings / reviews.length).toFixed(1)
+            : 0;
+
         return {
-          ...trainer.toObject(), // convert mongoose doc to plain object
+          _id: trainer._id,
+          name: trainer.user?.name || "Unknown",
+          bio: trainer.bio || "",
           photo: photoUrl,
+          averageRating: Number(averageRating),
+          totalReviews: reviews.length,
         };
       })
     );
 
-    res.json({ success: true, data: trainersWithPhotos });
+    // ✅ Send final response
+    res.status(200).json({
+      success: true,
+      data: trainerList,
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    console.error("Error fetching trainer list:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching trainers",
+      error: err.message,
+    });
   }
 };
 

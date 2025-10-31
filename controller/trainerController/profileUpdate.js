@@ -1,5 +1,6 @@
 import { getPresignedUrl } from "../../middleware/presigned.js";
 import Trainer from "../../models/trainer.model.js";
+import TrainerReview from "../../models/trainerReview.js";
 import User from "../../models/user.model.js";
 import { deleteFileFromS3 } from "../../utils/s3Service.js";
 
@@ -127,18 +128,30 @@ export const getTrainerDetail = async (req, res) => {
       });
     }
 
-    // Generate presigned URLs for trainer photos
+    // ✅ Fetch all reviews for this trainer
+    const reviews = await TrainerReview.find({ trainer: id })
+      .populate("user", "name email") // Populate user info
+      .sort({ createdAt: -1 });
+
+    // ✅ Calculate average rating
+    const totalRatings = reviews.reduce((sum, review) => sum + (review.rating || 0), 0);
+    const averageRating = reviews.length > 0 ? (totalRatings / reviews.length).toFixed(1) : 0;
+
+    // ✅ Generate presigned URLs for trainer photos
     const presignedUrls = await Promise.all(
       (trainer.photo || []).map((img) => getPresignedUrl(img))
     );
 
-    // Convert Mongoose doc to plain object and replace photo array
+    // Convert Mongoose doc to plain object and attach new fields
     const trainerData = {
       ...(trainer.toObject ? trainer.toObject() : trainer),
-      photo: presignedUrls[0],
+      photo: presignedUrls[0] || null,
+      // reviews,                // All reviews with user info
+      averageRating,          // Average rating (e.g., 4.7)
+      totalReviews: reviews.length, // Total number of reviews
     };
 
-    // Send the response
+    // ✅ Send the response
     res.status(200).json({
       success: true,
       data: trainerData,
