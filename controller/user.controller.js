@@ -24,6 +24,7 @@ dotenv.config(); // load env variables
 export const getActiveGymMembers = async (req, res) => {
   try {
     const userId = req.user.id;
+    const { search } = req.query; // 🔍 search term from frontend
 
     // 1️⃣ Find gym of logged-in user
     const gym = await Gym.findOne({ user: userId });
@@ -33,23 +34,37 @@ export const getActiveGymMembers = async (req, res) => {
         .json({ success: false, message: "Gym not found", data: [] });
     }
 
-    // 2️⃣ Fetch all members of this gym AND exclude 'pending' status
+    // 2️⃣ Build dynamic filter for user fields
+    let userFilter = { status: { $ne: "pending" } };
+    if (search && search.trim() !== "") {
+      const regex = new RegExp(search.trim(), "i"); // case-insensitive partial match
+      userFilter = {
+        ...userFilter,
+        $or: [
+          { email: regex },
+          { phone: regex },
+          { userId: !isNaN(search) ? Number(search) : -1 }, // exact match for numeric userId
+        ],
+      };
+    }
+
+    // 3️⃣ Fetch members of this gym, excluding pending users
     const members = await Member.find({
       "currentGym.gym": gym._id,
     })
       .populate({
         path: "user",
-        match: { status: { $ne: "pending" } }, // ❌ exclude pending users
-        select: "name email phone status",
+        match: userFilter,
+        select: "name email phone status userId",
       })
       .populate("currentGym.gym", "gymName")
       .populate("currentGym.plan", "name")
       .lean();
 
-    // 3️⃣ Filter out members whose user is null (because they were pending)
+    // 4️⃣ Filter out members whose user is null (excluded by match)
     const filteredMembers = members.filter((m) => m.user);
 
-    // 4️⃣ Format with plan price
+    // 5️⃣ Format with plan price
     const formatted = await Promise.all(
       filteredMembers.map(async (m) => {
         let planPrice = 0;
@@ -60,8 +75,10 @@ export const getActiveGymMembers = async (req, res) => {
           }).lean();
           planPrice = gymPlan?.price || 0;
         }
+
         return {
           id: m._id,
+          userId: m.user?.userId || "-",
           name: m.user?.name || "-",
           email: m.user?.email || "-",
           phone: m.user?.phone || "-",
@@ -71,7 +88,7 @@ export const getActiveGymMembers = async (req, res) => {
           fee_status: m.fee_status || "-",
           registered_at: m.registered_at,
           gym: m.currentGym?.gym?.gymName || "-",
-          photo: m.photo ? await getPresignedUrl(m.photo): null,
+          photo: m.photo ? await getPresignedUrl(m.photo) : null,
         };
       })
     );

@@ -81,18 +81,23 @@ export const verifyOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid OTP" });
     }
 
+    // 🔢 Generate userId (starting from 100)
+    const lastUser = await User.findOne().sort({ userId: -1 }).select("userId");
+    const newUserId = lastUser && lastUser.userId ? lastUser.userId + 1 : 100;
+
     // 🧠 Create user object
     const userData = {
+      userId: newUserId,
       name: tempUser.name,
       email: tempUser.email,
       phone: tempUser.phone,
-      password: tempUser.password, // ⚠️ hash this before saving (bcrypt)
+      password: tempUser.password, // ⚠️ hash before saving (bcrypt)
       userRole: tempUser.userRole,
     };
 
     // 🏋️ If user is gym, set status = pending
     if (tempUser.userRole === "gym") {
-      userData.status = "pending"; // 👈 default pending until approved
+      userData.status = "pending";
     }
 
     // 💾 Save User in DB
@@ -101,7 +106,6 @@ export const verifyOtp = async (req, res) => {
 
     // 🧩 Role-based profile creation
     if (tempUser.userRole === "gym") {
-      // ✅ use gymName from tempUser, not name
       await new Gym({ user: user._id, gymName: tempUser.gymName }).save();
     } else if (tempUser.userRole === "member") {
       await new Member({ user: user._id }).save();
@@ -117,6 +121,7 @@ export const verifyOtp = async (req, res) => {
       return res.json({
         success: true,
         userRole: "gym",
+        userId: newUserId,
         message:
           "Your registration request has been submitted successfully. Your account will be activated within 4 hours as per our rules and guidelines.",
       });
@@ -125,6 +130,7 @@ export const verifyOtp = async (req, res) => {
     // ✅ Default success message for other roles
     return res.json({
       success: true,
+      userId: newUserId,
       message: "Registration successful",
     });
   } catch (err) {
@@ -132,6 +138,8 @@ export const verifyOtp = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+
 
 export const userRegisterByAdmin = async (req, res) => {
   try {
@@ -146,13 +154,14 @@ export const userRegisterByAdmin = async (req, res) => {
       paidAmount,
       paymentMode,
       remark,
-      isManual, // ✅ frontend se true/false
-      manualStartDate, // optional
-      manualEndDate,   // optional
+      isManual,
+      manualStartDate,
+      manualEndDate,
     } = req.body;
 
     const adminId = req.user.id;
 
+    // 🏋️ Get admin gym
     const adminGym = await Gym.findOne({ user: adminId });
     if (!adminGym) {
       return res.status(404).json({
@@ -161,6 +170,7 @@ export const userRegisterByAdmin = async (req, res) => {
       });
     }
 
+    // 🔍 Check if email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res
@@ -168,15 +178,22 @@ export const userRegisterByAdmin = async (req, res) => {
         .json({ success: false, message: "Email already registered" });
     }
 
+    // 🔢 Generate sequential userId (starting from 100)
+    const lastUser = await User.findOne().sort({ userId: -1 }).select("userId");
+    const newUserId = lastUser && lastUser.userId ? lastUser.userId + 1 : 100;
+
+    // 👤 Create new user
     const newUser = await User.create({
+      userId: newUserId,
       name,
       email,
       phone,
-      password,
+      password, // ⚠️ hash this before saving if not already
       userRole,
       isVerified: true,
     });
 
+    // 🧾 Get selected plan
     const gymPlan = await GymPlan.findById(planId).populate(
       "planId",
       "name durationInMonths"
@@ -187,7 +204,7 @@ export const userRegisterByAdmin = async (req, res) => {
         .json({ success: false, message: "Invalid plan selected" });
     }
 
-    // ✅ Membership Dates
+    // 📅 Membership Dates
     let membershipStart, membershipEnd;
     if (isManual && manualStartDate && manualEndDate) {
       membershipStart = new Date(manualStartDate);
@@ -199,6 +216,7 @@ export const userRegisterByAdmin = async (req, res) => {
       membershipEnd.setMonth(membershipEnd.getMonth() + durationMonths);
     }
 
+    // 🧍‍♂️ Create member record
     const newMember = await Member.create({
       user: newUser._id,
       currentGym: {
@@ -219,6 +237,7 @@ export const userRegisterByAdmin = async (req, res) => {
           : "overdue",
     });
 
+    // 🗂️ Add to membership history
     await MembershipHistory.create({
       member: newMember._id,
       gym: adminGym._id,
@@ -228,6 +247,7 @@ export const userRegisterByAdmin = async (req, res) => {
       status: "active",
     });
 
+    // 💰 Fees collection
     const pendingAmount = totalAmount - paidAmount;
     await feesCollectionModel.create({
       member: newMember._id,
@@ -249,11 +269,13 @@ export const userRegisterByAdmin = async (req, res) => {
       ],
     });
 
+    // ✅ Final Response
     return res.status(200).json({
       success: true,
       message: `✅ Member registered successfully with ${gymPlan.planId.name}`,
       data: {
-        userId: newUser._id,
+        userId: newUserId, // 👈 added custom sequential userId
+        dbUserId: newUser._id,
         memberId: newMember._id,
         gymId: adminGym._id,
         planName: gymPlan.planId.name,

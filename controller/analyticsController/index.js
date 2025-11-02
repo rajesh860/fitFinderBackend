@@ -1,6 +1,7 @@
 import Gym from "../../models/gym.model.js";
 import Member from "../../models/member.model.js";
 import MonthlyGymAnalytics from "../../models/MonthlyGymAnalytic.model.js";
+import User from "../../models/user.model.js";
 
 export const generateMonthlyAnalytics = async () => {
   try {
@@ -83,3 +84,7 @@ export const generateMonthlyAnalytics = async () => {
     console.error("❌ Error generating monthly analytics:", err);
   }
 };
+
+
+
+

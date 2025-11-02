@@ -50,7 +50,7 @@ export const sendExpiryEmails = async () => {
 
       try {
         await transporter.sendMail({
-          from: `"FitMe Gym" <${process.env.EMAIL_USER}>`,
+          from: `"FitMe Gym" <${process.env.GMAIL_USER}>`,
           to: email,
           subject: "⏳ Your Gym Membership is Expiring Soon!",
           text: `Hi ${name},
