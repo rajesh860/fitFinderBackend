@@ -1,4 +1,3 @@
-import Member from "../../models/member.model.js";
 import User from "../../models/user.model.js";
 import { sendOtpEmail } from "../otpService.js";
 import jwt from "jsonwebtoken";
@@ -15,11 +14,11 @@ export const forgotPassword = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
 
     const otp = generateOtp();
-const otpExpiry = Date.now() + 1 * 60 * 1000
+const otpExpiry = Date.now() + 5 * 60 * 1000
     // Save OTP temporarily (5 minutes expiry)
     req.app.locals.tempOtpStore[email] = {
       otp,
-      expiresAt: Date.now() + 1 * 60 * 1000,
+      expiresAt: Date.now() + 5 * 60 * 1000,
     };
 await sendOtpEmail(email, otp);
     // In real app, send via email

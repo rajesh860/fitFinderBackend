@@ -8,6 +8,7 @@ const TrainerSchema = new mongoose.Schema(
     experience: String,
     bio: String,
     photo: [String],
+    gallery:[String],
     // rating: { type: String, default: "0" },
     averageRating: { type: Number, default: 0 },
     totalReviews: { type: Number, default: 0 },
