@@ -9,6 +9,7 @@ import trainerRoutes from "./routes/trainerRoutes.js";
 import {
   // backfillAllMembersAbsentAttendance,
   dailyCronJobs,
+  sendExpiryEmails,
 } from "./controller/cronJobs.js";
 import cron from "node-cron";
 import "./env.js"; // MongoDB connection

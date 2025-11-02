@@ -10,8 +10,8 @@ import User from "../models/user.model.js";
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASS,
   },
 });
 
@@ -41,12 +41,19 @@ export const sendExpiryEmails = async () => {
         $lte: upcomingExpiryDate.toDate(),
         $gte: today.toDate(),
       },
-    }).populate("user");
+    })
+      .populate("user")
+      .populate("currentGym.plan");
 
     for (const member of members) {
-      const email = member.user?.email;
-      const name = member.user?.name || "Member";
-      if (!email) continue;
+      // ⚠️ skip if user ya plan missing
+      if (!member.user || !member.currentGym?.plan) {
+        console.log(`⏭️ Skipping ${member.user?.email || "unknown"} (no active plan/user)`);
+        continue;
+      }
+
+      const email = member.user.email;
+      const name = member.user.name || "Member";
 
       try {
         await transporter.sendMail({
@@ -55,19 +62,19 @@ export const sendExpiryEmails = async () => {
           subject: "⏳ Your Gym Membership is Expiring Soon!",
           text: `Hi ${name},
 
-Your gym membership will expire on ${dayjs(member.membership_end).format(
-            "DD MMM YYYY"
-          )}. Please renew to continue your fitness journey!
+Your gym membership for "${member.currentGym.plan.name}" will expire on ${dayjs(
+            member.membership_end
+          ).format("DD MMM YYYY")}. Please renew to continue your fitness journey!
 
 - FitMe Team`,
         });
         console.log(`📩 Reminder email sent to ${email}`);
       } catch (mailErr) {
-        console.error(`❌ Failed to send email to ${email}:`, mailErr);
+        console.error(`❌ Failed to send email to ${email}:`, mailErr.message);
       }
     }
   } catch (err) {
-    console.error("❌ Error in sending reminder emails:", err);
+    console.error("❌ Error in sending reminder emails:", err.message);
   }
 };
 
