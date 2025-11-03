@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import Member from "../models/member.model.js";
 import Attendance from "../models/attendence.model.js";
 import User from "../models/user.model.js";
+import moment from "moment";
 
 
 // --- Mail transporter
@@ -18,10 +19,56 @@ const transporter = nodemailer.createTransport({
 // -----------------------------
 // 1️⃣ Expire old memberships
 // -----------------------------
+
+export const expireTodayMemberships = async (req, res) => {
+  try {
+    console.log("🔔 Checking memberships expiring today...");
+
+    // 🕛 Get today's start and end
+    const startOfToday = moment().startOf("day").toDate();
+    const endOfToday = moment().endOf("day").toDate();
+
+    // 🧠 Find members whose expiry date is today
+    const membersToExpire = await Member.find({
+      $or: [
+        { membership_end: { $gte: startOfToday, $lte: endOfToday } },
+        { "currentGym.membership_end": { $gte: startOfToday, $lte: endOfToday } },
+      ],
+      "currentGym.status": "active",
+    }).populate("user currentGym.plan");
+
+    if (!membersToExpire.length) {
+      console.log("✅ No memberships expiring today.");
+      return res.status(200).json({ message: "No memberships expiring today." });
+    }
+
+    // 🧩 Expire all found memberships
+    for (const member of membersToExpire) {
+      member.currentGym.status = "expired";
+      await member.save();
+
+      console.log(
+        `🚫 Membership expired for ${member.user?.email || "unknown"} — Plan: ${
+          member.currentGym?.plan?.name || "N/A"
+        }`
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `${membersToExpire.length} memberships expired successfully.`,
+    });
+  } catch (err) {
+    console.error("❌ Error expiring memberships:", err);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+
 export const handleMembershipExpiry = async () => {
   try {
     console.log("🔔 Running membership expiry check...");
-    await expireOldMemberships();
+    await expireTodayMemberships();
   } catch (err) {
     console.error("❌ Error in membership expiry:", err);
   }
@@ -32,45 +79,88 @@ export const handleMembershipExpiry = async () => {
 // -----------------------------
 export const sendExpiryEmails = async () => {
   try {
-    console.log("🔔 Sending membership expiry reminder emails...");
-    const today = dayjs().startOf("day");
-    const upcomingExpiryDate = today.add(3, "day").endOf("day");
+    console.log("🔔 Checking membership expiry reminders...");
 
+    const today = moment().startOf("day");
+    const endRange = moment().add(3, "days").endOf("day"); // today + 3 days
+
+    // 🧠 Fetch members whose expiry is between today and next 3 days
     const members = await Member.find({
-      membership_end: {
-        $lte: upcomingExpiryDate.toDate(),
-        $gte: today.toDate(),
-      },
+      $or: [
+        {
+          membership_end: {
+            $gte: today.toDate(),
+            $lte: endRange.toDate(),
+          },
+        },
+        {
+          "currentGym.membership_end": {
+            $gte: today.toDate(),
+            $lte: endRange.toDate(),
+          },
+        },
+      ],
     })
       .populate("user")
       .populate("currentGym.plan");
 
+    console.log(`🔍 Found ${members.length} members with upcoming expiry`);
+
+    if (!members.length) {
+      console.log("⚠️ No members found with expiring memberships.");
+      return;
+    }
+
     for (const member of members) {
-      // ⚠️ skip if user ya plan missing
-      if (!member.user || !member.currentGym?.plan) {
-        console.log(`⏭️ Skipping ${member.user?.email || "unknown"} (no active plan/user)`);
+      const user = member.user;
+      const plan = member.currentGym?.plan;
+
+      // ⚠️ Skip if user ya plan missing
+      if (!user || !plan) {
+        console.log(`⏭️ Skipping ${user?.email || "unknown"} (missing user/plan)`);
         continue;
       }
 
-      const email = member.user.email;
-      const name = member.user.name || "Member";
+      // ✅ Pick correct expiry date
+      const expiryDate =
+        member.currentGym?.membership_end || member.membership_end;
 
-      try {
-        await transporter.sendMail({
-          from: `"FitMe Gym" <${process.env.GMAIL_USER}>`,
-          to: email,
-          subject: "⏳ Your Gym Membership is Expiring Soon!",
-          text: `Hi ${name},
+      if (!expiryDate) {
+        console.log(`⏭️ Skipping ${user.email} (no expiry date found)`);
+        continue;
+      }
 
-Your gym membership for "${member.currentGym.plan.name}" will expire on ${dayjs(
-            member.membership_end
-          ).format("DD MMM YYYY")}. Please renew to continue your fitness journey!
+      const expiryMoment = moment(expiryDate);
+      const daysLeft = expiryMoment.diff(today, "days");
+
+      // 📆 Only email if expiring today, in 2 days, or in 3 days
+      if (daysLeft <= 3 && daysLeft >= 0) {
+        const email = user.email;
+        const name = user.name || "Member";
+
+        try {
+          await transporter.sendMail({
+            from: `"FitMe Gym" <${process.env.GMAIL_USER}>`,
+            to: email,
+            subject: "⏳ Your Gym Membership is Expiring Soon!",
+            text: `Hi ${name},
+
+Your gym membership for "${plan.name}" will expire on ${expiryMoment.format(
+              "DD MMM YYYY"
+            )}.
+Please renew soon to continue your fitness journey without interruption!
 
 - FitMe Team`,
-        });
-        console.log(`📩 Reminder email sent to ${email}`);
-      } catch (mailErr) {
-        console.error(`❌ Failed to send email to ${email}:`, mailErr.message);
+          });
+
+          console.log(`📩 Reminder email sent to ${email} (expires in ${daysLeft} days)`);
+        } catch (mailErr) {
+          console.error(`❌ Failed to send email to ${email}:`, mailErr.message);
+        }
+      } else {
+        console.log(
+          `⏭️ ${user.email} expires in ${daysLeft} days — skipping for now.`
+        );
       }
     }
   } catch (err) {

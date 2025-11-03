@@ -346,20 +346,37 @@ export const resendOtp = async (req, res) => {
 
 export const registerTrainer = async (req, res) => {
   try {
-    const gymId = req.user?.id || null; // agar available nahi to null
+    const gymId = req.user?.id || null;
     const { name, email, phone, password, specialization, experience, bio, photo, userRole } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ success: false, message: "Name, Email and Password are required" });
+      return res.status(400).json({
+        success: false,
+        message: "Name, Email, and Password are required",
+      });
     }
 
-    // ✅ Check if user exists
+    // ✅ Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ success: false, message: "Email already registered" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Email already registered" });
     }
 
-    // ✅ Create User (plain password)
+    // ✅ If gymId present, verify gym exists
+    let gymDoc = null;
+    if (gymId) {
+      gymDoc = await Gym.findOne({user:gymId});
+      if (!gymDoc) {
+        return res.status(404).json({
+          success: false,
+          message: "Gym not found. Please provide a valid gym ID.",
+        });
+      }
+    }
+
+    // ✅ Create new user (password hashed if middleware applied)
     const newUser = await User.create({
       name,
       email,
@@ -369,15 +386,22 @@ export const registerTrainer = async (req, res) => {
       status: "active",
     });
 
-    // ✅ Create Trainer linked to User
+    // ✅ Create trainer linked to user & gym (if exists)
     const newTrainer = await Trainer.create({
       user: newUser._id,
       specialization: specialization || [],
-      experience: experience || 0,
+      experience: experience || "0",
       bio: bio || "",
-      photo: photo || "",
-      gyms: gymId ? [gymId] : [], // agar gymId hai to array me add, nahi to empty array
+      photo: Array.isArray(photo) ? photo : [photo],
+      gyms: gymDoc ? [gymDoc._id] : [],
     });
+
+    // ✅ Optional: Update gym’s trainer list
+    if (gymDoc) {
+      await Gym.findByIdAndUpdate(gymDoc._id, {
+        $addToSet: { trainers: newTrainer._id },
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -385,7 +409,9 @@ export const registerTrainer = async (req, res) => {
       data: { user: newUser, trainer: newTrainer },
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    console.error("Error in registerTrainer:", err);
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: err.message });
   }
 };

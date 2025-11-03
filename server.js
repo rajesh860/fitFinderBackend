@@ -9,7 +9,6 @@ import trainerRoutes from "./routes/trainerRoutes.js";
 import {
   // backfillAllMembersAbsentAttendance,
   dailyCronJobs,
-  sendExpiryEmails,
 } from "./controller/cronJobs.js";
 import cron from "node-cron";
 import "./env.js"; // MongoDB connection
@@ -36,6 +35,7 @@ app.use("/user", userRoutes);
 app.use("/trainer", trainerRoutes);
 // markAbsentMembers()
 dailyCronJobs();
+
 // Har month ke 1st date 00:00 AM pe run hoga
 cron.schedule("0 0 1 * *", async () => {
   console.log("🕒 Running monthly gym analytics cron job...");

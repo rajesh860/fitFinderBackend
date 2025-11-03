@@ -1,31 +1,60 @@
 import { getPresignedUrl } from "../../middleware/presigned.js";
+import Gym from "../../models/gym.model.js";
 import Trainer from "../../models/trainer.model.js";
 import TrainerReview from "../../models/trainerReview.js";
 
-export const trainerList  = async (req, res) => {
+export const trainerList = async (req, res) => {
   try {
-    // 👇 Assume gym id is passed as query OR get from logged-in user
-    const gymId = req.user.id;
+    // ✅ Gym ID from logged-in user OR query
+    const gymId = req.user?.id
 
     if (!gymId) {
-      return res.status(400).json({ success: false, message: "Gym ID is required" });
+      return res.status(400).json({
+        success: false,
+        message: "Gym ID is required to fetch trainers.",
+      });
     }
 
-    // Fetch trainers who belong to this gym
-    const trainers = await Trainer.find({ gyms: gymId })
-      .populate("user", "name email phone")
-      .populate("gyms", "name location");
+    // ✅ Verify Gym existence
+    const gymExists = await Gym.findOne({user:gymId}).select("_id name location");
+    if (!gymExists) {
+      return res.status(404).json({
+        success: false,
+        message: "Gym not found. Please provide a valid Gym ID.",
+      });
+    }
+    // ✅ Fetch trainers linked to this gym
+    const trainers = await Trainer.find({ gyms: gymExists?._id })
+      .populate("user", "name email phone") // Basic user info
+      .populate("gyms", "name location")    // Gym info
+      .select("specialization experience bio averageRating totalReviews photo gallery createdAt");
 
-    if (!trainers.length) {
-      return res.status(404).json({ success: false, message: "No trainers found" });
+    // ✅ If no trainers found
+    if (!trainers || trainers.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No trainers found for this gym.",
+        data: [],
+      });
     }
 
-    res.json({ success: true, data: trainers });
+    // ✅ Response with data
+    res.status(200).json({
+      success: true,
+      count: trainers.length,
+      gym: gymExists,
+      data: trainers,
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    console.error("Error in trainerList:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error occurred while fetching trainers.",
+      error: err.message,
+    });
   }
-}
+};
+
 export const getAllTrainerList = async (req, res) => {
   try {
     // 🧩 Fetch trainers and populate user name
@@ -90,11 +119,10 @@ export const getAllTrainerList = async (req, res) => {
 export const getTrainerProfile = async (req, res) => {
   try {
     const { id } = req.user;
-    console.log(req.file, "hit");
-
+    
     const trainer = await Trainer.findOne({ user: id })
-      .populate("user", "name email phone")
-      .populate("gyms", "name location");
+    .populate("user", "name email phone")
+    .populate("gyms", "gymName address");
 
     if (!trainer) {
       return res.status(404).json({ success: false, message: "Trainer not found" });
