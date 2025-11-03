@@ -11,6 +11,7 @@ import Trainer from "../../models/trainer.model.js"
 export const requestOtp = async (req, res) => {
   try {
     const { name, email, phone, password, userRole, gymName } = req.body;
+    // console.log(name,email)
     // 🔒 Admin check: only one admin allowed
     // if (userRole === "admin") {
     //   const adminExist = await User.findOne({ userRole: "admin" });

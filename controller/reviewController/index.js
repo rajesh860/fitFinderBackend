@@ -26,25 +26,15 @@ export const addOrUpdateReview = async (req, res) => {
       });
     }
 
-    // ✅ Check if review already exists
-    let existingReview = await ReviewModel.findOne({ gym: gymId, user: userId });
+    // ✅ Always create a new review (no update)
+    const newReview = await ReviewModel.create({
+      gym: gymId,
+      user: userId,
+      rating,
+      comment,
+    });
 
-    if (existingReview) {
-      // Update review
-      existingReview.rating = rating;
-      existingReview.comment = comment || existingReview.comment;
-      await existingReview.save();
-    } else {
-      // Create new review
-      existingReview = await ReviewModel.create({
-        gym: gymId,
-        user: userId,
-        rating,
-        comment,
-      });
-    }
-
-    // ✅ Calculate avg rating & total reviews
+    // ✅ Recalculate avg rating & total reviews
     const stats = await ReviewModel.aggregate([
       { $match: { gym: new mongoose.Types.ObjectId(gymId) } },
       {
@@ -61,9 +51,9 @@ export const addOrUpdateReview = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Review submitted successfully",
+      message: "Review added successfully",
       data: {
-        review: existingReview,
+        review: newReview,
         avgRating,
         totalReviews,
       },
@@ -73,7 +63,6 @@ export const addOrUpdateReview = async (req, res) => {
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
-
 
 
 export const getReview = async (req,res)=>{

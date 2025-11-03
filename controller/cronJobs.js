@@ -433,3 +433,56 @@ export const createMembersFromUsers = async (req, res) => {
 };
 
 // createMembersFromUsers()
+
+
+
+
+
+
+
+
+
+
+// export const assignSequentialUserIds = async (req, res) => {
+//   try {
+//     console.log("🔄 Resetting all userIds...");
+//     // Step 1: Remove old IDs to avoid duplicate constraint
+//     await User.updateMany({}, { $unset: { userId: "" } });
+
+//     const users = await User.find().sort({ createdAt: 1 }); // oldest first
+//     console.log(`Found ${users.length} users`);
+
+//     let nextId = 100;
+//     const bulkOps = users.map((user) => ({
+//       updateOne: {
+//         filter: { _id: user._id },
+//         update: { $set: { userId: String(nextId++) } },
+//       },
+//     }));
+
+//     if (bulkOps.length > 0) {
+//       const result = await User.bulkWrite(bulkOps);
+//       console.log(`✅ Updated ${result.modifiedCount} users successfully.`);
+//     }
+
+//     // if running as API route
+//     if (res) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "User IDs assigned successfully",
+//       });
+//     } else {
+//       console.log("✅ User IDs assigned successfully (script mode).");
+//     }
+
+//   } catch (error) {
+//     console.error("❌ Error updating userIds:", error);
+
+//     if (res) {
+//       return res.status(500).json({ success: false, message: "Server error" });
+//     }
+//   }
+// };
+
+
+// assignSequentialUserIds()
