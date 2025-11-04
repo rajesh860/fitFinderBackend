@@ -4,6 +4,7 @@ import User from "../../models/user.model.js";
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log(email,password)
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
     }
@@ -14,12 +15,12 @@ export const login = async (req, res) => {
     // ✅ Find user case-insensitively
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(400).json({ message: "Invalid email or password" });
     }
 
     // ✅ Plain password check (should later be replaced by bcrypt)
     if (user.password !== password) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(400).json({ message: "Invalid email or password" });
     }
 
     // ✅ Restrict access for admin/gym
@@ -36,7 +37,7 @@ export const login = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Login successful",
+      message: "Login successfully",
       token,
       user: {
         userId: user._id,

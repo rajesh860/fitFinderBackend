@@ -26,6 +26,6 @@ const FeeCollectionSchema = new mongoose.Schema({
     default: "pending",
   },
   payments: [PaymentSchema],
-});
+},{ timestamps: true });
 
 export default mongoose.model("FeeCollection", FeeCollectionSchema);

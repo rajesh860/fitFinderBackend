@@ -5,6 +5,8 @@ import {GymHistory} from "../../models/gymHistory.model.js";
 import Member from "../../models/member.model.js";
 import Gym from "../../models/gym.model.js";
 import mongoose from "mongoose";
+import feesCollectionModel from "../../models/feesCollection.model.js";
+import MembershipHistory from "../../models/planHistroy.model.js";
 // Create Plan
 export const createPlan = async (req, res) => {
   try {
@@ -285,5 +287,120 @@ export const getPlanDetail = async (req, res) => {
   } catch (error) {
     console.error("Plan Detail Error:", error);
     res.status(500).json({ success: false, message: "Server Error", error: error.message });
+  }
+};
+
+
+
+
+export const renewMemberPlan = async (req, res) => {
+  try {
+    const getGymId = req.user.id;
+    const {
+      memberId,
+      planId,
+      startDate,
+      endDate,
+      totalAmount,
+      paidAmount,
+      pendingAmount,
+    } = req.body;
+
+    // 🔍 Find gym by user
+    const findGym = await Gym.findOne({ user: getGymId });
+    if (!findGym) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Gym not found" });
+    }
+
+    const gymId = findGym._id;
+
+    // 🧩 Basic field validation
+    if (!memberId || !gymId || !planId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing required fields" });
+    }
+
+    // 🔍 1️⃣ Validate member
+    const memberExists = await Member.findById(memberId);
+    if (!memberExists) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Member not found" });
+    }
+
+    // 🔍 2️⃣ Mark old FeeCollection as completed
+    await feesCollectionModel.updateMany(
+      { member: memberId, gym: gymId, status: "active" },
+      { $set: { status: "completed" } }
+    );
+
+    // 🔍 3️⃣ Fetch selected plan details
+    const gymPlan = await GymPlan.findById(planId).populate("planId", "name");
+    if (!gymPlan) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Plan not found" });
+    }
+
+    // 🧾 4️⃣ Create new active FeeCollection for renewed plan
+    const newFeeCollection = await feesCollectionModel.create({
+      member: memberId,
+      gym: gymId,
+      planName: gymPlan.planId.name,
+      totalAmount,
+      paidAmount,
+      pendingAmount,
+      startDate,
+      endDate,
+      status: "active",
+      payments:
+        paidAmount > 0
+          ? [
+              {
+                amount: paidAmount,
+                mode: "cash",
+                remark: "Plan Renew Initial Payment",
+              },
+            ]
+          : [],
+    });
+
+    // 🔄 5️⃣ Update Member currentGym info
+    await Member.findByIdAndUpdate(memberId, {
+      currentGym: {
+        gym: gymId,
+        plan: planId,
+        membership_start: startDate,
+        membership_end: endDate,
+        status: "active",
+      },
+    });
+
+    // 📜 6️⃣ Record Membership History
+    await MembershipHistory.create({
+      member: memberId,
+      gym: gymId,
+      plan: planId,
+      membership_start: startDate,
+      membership_end: endDate,
+      status: "active",
+    });
+
+    // ✅ Success response
+    return res.status(200).json({
+      success: true,
+      message: "Plan renewed successfully",
+      data: newFeeCollection,
+    });
+  } catch (error) {
+    console.error("Renew Plan Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
   }
 };

@@ -11,6 +11,7 @@ import Trainer from "../../models/trainer.model.js"
 export const requestOtp = async (req, res) => {
   try {
     const { name, email, phone, password, userRole, gymName } = req.body;
+    const newName = name.trim();
     // console.log(name,email)
     // 🔒 Admin check: only one admin allowed
     // if (userRole === "admin") {
@@ -38,7 +39,7 @@ export const requestOtp = async (req, res) => {
     // 🧠 Store OTP and user data in temporary memory
     req.app.locals.tempOtpStore = req.app.locals.tempOtpStore || {};
     req.app.locals.tempOtpStore[email] = {
-      name,
+      name:newName,
       email,
       phone,
       password,
@@ -84,7 +85,7 @@ export const verifyOtp = async (req, res) => {
 
     // 🔢 Generate userId (starting from 100)
     const lastUser = await User.findOne().sort({ userId: -1 }).select("userId");
-    const newUserId = lastUser && lastUser.userId ? lastUser.userId + 1 : 100;
+    const newUserId = lastUser && lastUser.userId ? Number(lastUser.userId) + 1 : 100;
 
     // 🧠 Create user object
     const userData = {
@@ -181,7 +182,7 @@ export const userRegisterByAdmin = async (req, res) => {
 
     // 🔢 Generate sequential userId (starting from 100)
     const lastUser = await User.findOne().sort({ userId: -1 }).select("userId");
-    const newUserId = lastUser && lastUser.userId ? lastUser.userId + 1 : 100;
+    const newUserId = lastUser && lastUser.userId ? Number(lastUser.userId) + 1 : 100;
 
     // 👤 Create new user
     const newUser = await User.create({

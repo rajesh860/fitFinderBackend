@@ -25,7 +25,7 @@ export const trainerList = async (req, res) => {
     }
     // ✅ Fetch trainers linked to this gym
     const trainers = await Trainer.find({ gyms: gymExists?._id })
-      .populate("user", "name email phone") // Basic user info
+      .populate("user", "name email phone userId") // Basic user info
       .populate("gyms", "name location")    // Gym info
       .select("specialization experience bio averageRating totalReviews photo gallery createdAt");
 

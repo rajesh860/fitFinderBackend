@@ -11,10 +11,12 @@ import {
   createGymPlan,
   getMyPlans,
   getPlanName,
+  renewMemberPlan,
   updateGymPlan,
 } from "../controller/plan/plan.js";
 import { uploadMiddleware } from "../middleware/upload.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
+import { getGymDashboardController} from "../controller/gymController/gymAnalyticsController.js"
 import {
   addProgressUserByGym,
   approveEnquiryByAdmin,
@@ -90,7 +92,8 @@ router.post("/add-pending-payment", authMiddleware, addPendingPayment);
 router.get("/get-review/:gymId", authMiddleware, getReview);
 
 router.get("/get-trainer-list", authMiddleware, trainerList);
+router.post("/renew-plan", authMiddleware, renewMemberPlan);
 
-
+router.get("/:gymId/analytics", getGymDashboardController);
 
 export default router;

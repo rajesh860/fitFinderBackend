@@ -2,35 +2,47 @@ import feesCollectionModel from "../../models/feesCollection.model.js";
 
 export const getAllFeeCollections = async (req, res) => {
   try {
-    const { fee_status } = req.query;
+    const { fee_status, searchText } = req.query;
 
-    // Build the query
+    // ✅ Build base query
     let query = {};
+
     if (fee_status) {
       query["member.fee_status"] = fee_status;
     }
 
-    // Fetch all collections
+    // ✅ Fetch collections with related data
     const collections = await feesCollectionModel
-      .find()
+      .find(query)
       .populate({
         path: "member",
         populate: {
           path: "user",
-          select: "name email phone",
+          select: "name email phone userId",
         },
       })
       .populate("gym", "name location");
 
-    // Filter if needed
     let filteredCollections = collections;
-    if (fee_status) {
-      filteredCollections = collections.filter(
-        (c) => c.member?.fee_status === fee_status
-      );
+
+    // ✅ If searchText exists → match by name, email, phone, or userId
+    if (searchText && searchText.trim() !== "") {
+      const regex = new RegExp(searchText, "i"); // case-insensitive partial match
+
+      filteredCollections = collections.filter((c) => {
+        const user = c.member?.user;
+        const userId = String(user?._id || "");
+
+        return (
+          regex.test(user?.name || "") ||
+          regex.test(user?.email || "") ||
+          regex.test(user?.phone || "") ||
+          regex.test(userId)
+        );
+      });
     }
 
-    // 🧮 Calculate summary safely
+    // 🧮 Calculate summary
     const totalFees = filteredCollections.reduce(
       (sum, item) => sum + (item.totalAmount || 0),
       0
@@ -44,7 +56,8 @@ export const getAllFeeCollections = async (req, res) => {
       0
     );
 
-    if (!filteredCollections || filteredCollections.length === 0) {
+    // 🟠 Handle empty results
+    if (!filteredCollections.length) {
       return res.status(200).json({
         success: false,
         message: "No fee collection found",
@@ -53,7 +66,7 @@ export const getAllFeeCollections = async (req, res) => {
       });
     }
 
-    // ✅ Send success response
+    // ✅ Final response
     res.status(200).json({
       success: true,
       data: filteredCollections,
@@ -68,6 +81,8 @@ export const getAllFeeCollections = async (req, res) => {
     });
   }
 };
+
+
 
 
 
