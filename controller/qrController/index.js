@@ -70,13 +70,13 @@ export const scanGymQR = async (req, res) => {
         .json({ success: false, message: "You are not a member of this gym" });
 
     // ✅ Check membership plan validity
-    const currentPlan = member.currentPlan; // ensure this field exists in your model
+    const currentPlan = member?.currentGym; // ensure this field exists in your model
     const today = dayjs();
-
+console.log(currentPlan)
     if (
       !currentPlan ||
-      !currentPlan.endDate ||
-      dayjs(currentPlan.endDate).isBefore(today, "day")
+      !currentPlan.membership_end ||
+      dayjs(currentPlan.membership_end).isBefore(today, "day")
     ) {
       return res.status(400).json({
         success: false,
