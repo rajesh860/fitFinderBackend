@@ -309,9 +309,7 @@ export const renewMemberPlan = async (req, res) => {
     // 🔍 Find gym by user
     const findGym = await Gym.findOne({ user: getGymId });
     if (!findGym) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Gym not found" });
+      return res.status(400).json({ success: false, message: "Gym not found" });
     }
 
     const gymId = findGym._id;
@@ -331,21 +329,78 @@ export const renewMemberPlan = async (req, res) => {
         .json({ success: false, message: "Member not found" });
     }
 
-    // 🔍 2️⃣ Mark old FeeCollection as completed
-    await feesCollectionModel.updateMany(
-      { member: memberId, gym: gymId, status: "active" },
-      { $set: { status: "completed" } }
-    );
-
-    // 🔍 3️⃣ Fetch selected plan details
-    const gymPlan = await GymPlan.findOne({planId:planId}).populate("planId", "name");
+    // 🔍 2️⃣ Fetch selected plan details
+    const gymPlan = await GymPlan.findOne({ planId: planId }).populate("planId", "name");
     if (!gymPlan) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Plan not found" });
+      return res.status(404).json({ success: false, message: "Plan not found" });
     }
 
-    // 🧾 4️⃣ Create new active FeeCollection for renewed plan
+    // 🔍 3️⃣ Check if member's current gym is same as this gym
+    const isSameGym = memberExists.currentGym?.gym?.toString() === gymId.toString();
+
+    // 🔍 4️⃣ Find existing fee collection for this member in this gym (any status)
+    let existingFee = await feesCollectionModel.findOne({
+      member: memberId,
+      gym: gymId,
+    });
+
+    if (existingFee && isSameGym) {
+      // ✅ Member same gym mein hai - existing record update karo
+      
+      // Payment add karo agar paidAmount > 0 hai
+      if (paidAmount > 0) {
+        existingFee.payments.push({
+          amount: paidAmount,
+          mode: "cash",
+          remark: "Plan Renew Payment",
+          date: new Date()
+        });
+      }
+
+      // Amounts update karo
+      existingFee.paidAmount += paidAmount;
+      existingFee.pendingAmount = pendingAmount;
+      existingFee.totalAmount = totalAmount;
+      
+      // Dates update karo
+      existingFee.startDate = startDate;
+      existingFee.endDate = endDate;
+      
+      // Status update karo
+      existingFee.status = "active";
+      existingFee.planName = gymPlan.planId.name;
+
+      await existingFee.save();
+
+      // 🧾 Update member's current gym
+      await Member.findByIdAndUpdate(memberId, {
+        "currentGym.gym": gymId,
+        "currentGym.plan": planId,
+        "currentGym.membership_start": startDate,
+        "currentGym.membership_end": endDate,
+        "currentGym.status": "active",
+        fee_status: pendingAmount > 0 ? "pending" : "paid"
+      });
+
+      // 🧾 Add to membership history
+      await MembershipHistory.create({
+        member: memberId,
+        gym: gymId,
+        plan: planId,
+        membership_start: startDate,
+        membership_end: endDate,
+        status: "active",
+        remark: `Plan renewed - ${gymPlan.planId.name}`
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Plan renewed successfully in existing gym",
+        data: existingFee,
+      });
+    }
+
+    // 🆕 Member different gym mein hai ya koi existing record nahi hai - nayi entry create karo
     const newFeeCollection = await feesCollectionModel.create({
       member: memberId,
       gym: gymId,
@@ -362,24 +417,24 @@ export const renewMemberPlan = async (req, res) => {
               {
                 amount: paidAmount,
                 mode: "cash",
-                remark: "Plan Renew Initial Payment",
+                remark: "Initial Payment for New Gym",
+                date: new Date()
               },
             ]
           : [],
     });
 
-    // 🔄 5️⃣ Update Member currentGym info
+    // 🧾 Update member's current gym (new gym set karo)
     await Member.findByIdAndUpdate(memberId, {
-      currentGym: {
-        gym: gymId,
-        plan: planId,
-        membership_start: startDate,
-        membership_end: endDate,
-        status: "active",
-      },
+      "currentGym.gym": gymId,
+      "currentGym.plan": planId,
+      "currentGym.membership_start": startDate,
+      "currentGym.membership_end": endDate,
+      "currentGym.status": "active",
+      fee_status: pendingAmount > 0 ? "pending" : "paid"
     });
 
-    // 📜 6️⃣ Record Membership History
+    // 🧾 Add to membership history
     await MembershipHistory.create({
       member: memberId,
       gym: gymId,
@@ -387,12 +442,12 @@ export const renewMemberPlan = async (req, res) => {
       membership_start: startDate,
       membership_end: endDate,
       status: "active",
+      remark: `New plan started - ${gymPlan.planId.name}`
     });
 
-    // ✅ Success response
     return res.status(200).json({
       success: true,
-      message: "Plan renewed successfully",
+      message: "New plan created for member in new gym",
       data: newFeeCollection,
     });
   } catch (error) {

@@ -67,11 +67,13 @@ export const expireTodayMemberships = async () => {
       const feeResult = await feesCollectionModel.updateMany(
         {
           member: { $in: memberIds },
-          status: { $ne: "pending" },
+          status: { $ne: "expired" },
+          planName: { $ne: "BASIC" },
         },
         {
           $set: {
-            status: "pending",
+            planName:"BASIC",
+            status: "expired",
           },
         }
       );

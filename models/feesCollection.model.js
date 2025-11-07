@@ -22,7 +22,7 @@ const FeeCollectionSchema = new mongoose.Schema({
   endDate: Date,
   status: {
     type: String,
-    enum: ["active", "completed", "pending"],
+    enum: ["active", "completed", "pending","expired"],
     default: "pending",
   },
   payments: [PaymentSchema],
