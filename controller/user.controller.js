@@ -105,53 +105,50 @@ export const getActiveGymMembers = async (req, res) => {
 export const findSignalUser = async (req, res) => {
   try {
     const { id } = req.user;
-    // const { gymId } = req.body;
 
-    // User aur Member fetch karo, gym aur plan dono populate
-    // const userData = await User.findById(id).lean()
     const userProfile = await Member.findOne({ user: id })
-      .populate("user", "name email phone") // plan ka name chahiye
-      .populate("currentGym.gym", "gymName contact address plan") // plan ka name chahiye
+      .populate("user", "name email phone")
+      .populate("currentGym.gym", "gymName contact address plan")
       .populate("currentGym.plan", "name duration")
       .lean();
-    const progress = await Progress.findOne({
-      member: userProfile?._id,
-    }).lean();
-    // console.log(progress, "progress");
 
-    //    const attendance = await Attendance.findOne({
-    //   member: id,
-    //   gym: gymId,
-    //   // date: { $gte: todayStart, $lte: todayEnd },
-    // }).populate("gym", "gymName") // Gym ka naam bhi populate kar sakte ho
-    //   .sort({ date: -1 }).lean();
-        // const userProfile2 = await Member.findOne({ user: id })
     if (!userProfile) {
       return res.status(404).json({ message: "User not found" });
     }
 
+    const progress = await Progress.findOne({
+      member: userProfile?._id,
+    }).lean();
+
+    // 🧠 Safe access helper
+    const planName =
+      userProfile?.currentGym?.plan?.name ||
+      "N/A";
+
     const mergedUser = {
-      // ...userData,
       progress: progress?.current || null,
-      planName: userProfile?.currentGym?.plan.name,
-      name: userProfile?.user?.name,
-      email: userProfile?.user?.email,
-      phone: userProfile?.user?.phone,
-      gymName: userProfile?.currentGym?.gym?.gymName,
-      gymStatus: userProfile?.currentGym?.status,
-      membership_start: userProfile?.currentGym?.membership_start,
-      membership_end: userProfile?.currentGym?.membership_end,
-      // currentGym:{...userProfile?.currentGym?.gym},
+      planName,
+      name: userProfile?.user?.name || null,
+      email: userProfile?.user?.email || null,
+      phone: userProfile?.user?.phone || null,
+      gymName: userProfile?.currentGym?.gym?.gymName || null,
+      gymStatus: userProfile?.currentGym?.status || null,
+      membership_start: userProfile?.currentGym?.membership_start || null,
+      membership_end: userProfile?.currentGym?.membership_end || null,
       ...userProfile,
-      // attendance:attendance || null,
-      photo: userProfile.photo
+      photo: userProfile?.photo
         ? await getPresignedUrl(userProfile.photo)
         : null,
-      // plan: userProfile.plan?.name || null, // populate ke baad name milega
     };
+
+  
     res.json(mergedUser);
   } catch (error) {
-    res.status(500).json({ message: "Server Error", error: error.message });
+    console.error("findSignalUser error:", error);
+    res.status(500).json({
+      message: "Server Error",
+      error: error.message,
+    });
   }
 };
 
@@ -1132,8 +1129,7 @@ export const getMembershipHistory = async (req, res) => {
 
 export const getClientDashboard = async (req, res) => {
   try {
-
-    const { id } = req.user; // userId from token
+    const { id } = req.user;
 
     const user = await Member.findOne({ user: id })
       .populate("user", "name email userRole")
@@ -1144,32 +1140,36 @@ export const getClientDashboard = async (req, res) => {
       })
       .populate({
         path: "currentGym.plan",
-        select: "name durationDays",
+        select: "name durationDays price",
       });
 
     if (!user)
       return res.status(404).json({ success: false, message: "User not found" });
 
     if (!["member", "demo"].includes(user.user.userRole))
-      return res.status(403).json({ success: false, message: "Access denied: Not a member" });
+      return res
+        .status(403)
+        .json({ success: false, message: "Access denied: Not a member" });
 
-    // 🔹 Attendance
+    // Attendance
     const allAttendance = await Attendance.find({ member: user._id }).sort({ date: -1 });
     const totalDays = allAttendance.length;
-    const presentDays = allAttendance.filter(a => a.status === "present").length;
+    const presentDays = allAttendance.filter((a) => a.status === "present").length;
     const today = new Date().setHours(0, 0, 0, 0);
-    const presentToday = allAttendance.some(a => new Date(a.date).setHours(0,0,0,0) === today && a.status === "present");
+    const presentToday = allAttendance.some(
+      (a) => new Date(a.date).setHours(0, 0, 0, 0) === today && a.status === "present"
+    );
 
-    // 🔹 Streak
+    // Streak
     let streakDays = 0;
     for (let i = 0; i < allAttendance.length; i++) {
-      const current = new Date(allAttendance[i].date).setHours(0,0,0,0);
-      const compareDate = new Date(today - streakDays * 24 * 60 * 60 * 1000).setHours(0,0,0,0);
+      const current = new Date(allAttendance[i].date).setHours(0, 0, 0, 0);
+      const compareDate = new Date(today - streakDays * 86400000).setHours(0, 0, 0, 0);
       if (current === compareDate && allAttendance[i].status === "present") streakDays++;
       else break;
     }
 
-    // 🔹 Progress
+    // Progress
     const progress = await Progress.findOne({ member: user._id });
     let progressPercent = 0;
     if (progress?.current?.weight && progress?.history?.length) {
@@ -1177,7 +1177,10 @@ export const getClientDashboard = async (req, res) => {
       const currentWeight = progress.current.weight;
       const targetWeight = progress.current.targetWeight || currentWeight - 5;
       if (startWeight !== targetWeight) {
-        progressPercent = Math.min(100, Math.round(((startWeight - currentWeight)/(startWeight - targetWeight)) * 100));
+        progressPercent = Math.min(
+          100,
+          Math.round(((startWeight - currentWeight) / (startWeight - targetWeight)) * 100)
+        );
       }
     }
 
@@ -1189,20 +1192,30 @@ export const getClientDashboard = async (req, res) => {
       thigh: progress?.current?.thigh || null,
     };
 
-    // 🔹 Current Plan + Gym Details
+    // Plan + Gym
     const currentGym = user.currentGym;
     let planData = null;
 
-    if (currentGym?.plan) {
-      // calculate days left
-      const membershipStart = new Date(currentGym.membership_start);
-      const membershipEnd = new Date(currentGym.membership_end);
+    if (currentGym && currentGym.plan && currentGym.gym) {
+      const membershipStart = currentGym.membership_start;
+      const membershipEnd = currentGym.membership_end;
       const todayDate = new Date();
-      const totalPlanDays = Math.ceil((membershipEnd - membershipStart)/(1000*60*60*24));
-      const daysLeft = Math.max(0, Math.ceil((membershipEnd - todayDate)/(1000*60*60*24)));
 
-      // 🔹 Calculate avgRating and totalReviews for this gym
-      let avgRating = 0, totalReviews = 0;
+      const totalPlanDays =
+        membershipStart && membershipEnd
+          ? Math.ceil((membershipEnd - membershipStart) / (1000 * 60 * 60 * 24))
+          : 0;
+
+      const daysLeft =
+        membershipEnd && todayDate
+          ? Math.max(0, Math.ceil((membershipEnd - todayDate) / (1000 * 60 * 60 * 24)))
+          : 0;
+
+      const planStatus = daysLeft <= 0 ? "expired" : "active";
+
+      // Rating
+      let avgRating = 0,
+        totalReviews = 0;
       if (currentGym.gym?._id) {
         const reviews = await ReviewModel.find({ gym: currentGym.gym._id });
         totalReviews = reviews.length;
@@ -1213,23 +1226,26 @@ export const getClientDashboard = async (req, res) => {
       }
 
       planData = {
+        planId: currentGym.plan._id,
         name: currentGym.plan.name,
+        durationDays: currentGym.plan.durationDays,
         totalDays: totalPlanDays,
         daysLeft,
-        planId: currentGym.plan._id,
+        status: planStatus,
+        membership_start: membershipStart,
+        membership_end: membershipEnd,
         gymDetails: {
-          status: currentGym.status || "inactive",
           name: currentGym.gym?.gymName || "N/A",
           contact: currentGym.gym?.contact || "N/A",
-          avgRating,
-          totalReviews,
           location: currentGym.gym?.location || null,
           images: currentGym.gym?.images || [],
+          avgRating,
+          totalReviews,
         },
       };
     }
 
-    // 🔹 Tip of the Day
+    // Tips
     const tips = [
       "Stay consistent — even small efforts count!",
       "Progress over perfection 💪",
@@ -1245,7 +1261,7 @@ export const getClientDashboard = async (req, res) => {
         memberName: user.user.name,
         memberId: user._id,
         attendance: { total: totalDays, present: presentDays, presentToday, streakDays },
-        progress: { percent: progressPercent, goal: progress?.goal || "Muscle Gain", currentWeight: progress?.current?.weight, targetWeight: progress?.current?.targetWeight, ...bodyMeasurements },
+        progress: { percent: progressPercent, goal: progress?.goal || "Muscle Gain", ...bodyMeasurements },
         plan: planData,
         tip,
       },
@@ -1255,3 +1271,5 @@ export const getClientDashboard = async (req, res) => {
     res.status(500).json({ success: false, message: "Server Error", error: error.message });
   }
 };
+
+

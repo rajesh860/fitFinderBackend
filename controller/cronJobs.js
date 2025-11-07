@@ -5,6 +5,8 @@ import Member from "../models/member.model.js";
 import Attendance from "../models/attendence.model.js";
 import User from "../models/user.model.js";
 import moment from "moment";
+import feesCollectionModel from "../models/feesCollection.model.js";
+import MembershipHistory from "../models/planHistroy.model.js";
 
 
 // --- Mail transporter
@@ -20,51 +22,113 @@ const transporter = nodemailer.createTransport({
 // 1️⃣ Expire old memberships
 // -----------------------------
 
-export const expireTodayMemberships = async (req, res) => {
-  try {
-    console.log("🔔 Checking memberships expiring today...");
 
-    // 🕛 Get today's start and end
-    const startOfToday = moment().startOf("day").toDate();
+export const expireTodayMemberships = async () => {
+  try {
+    console.log("🔄 Checking and expiring memberships whose end date has passed...");
+
     const endOfToday = moment().endOf("day").toDate();
 
-    // 🧠 Find members whose expiry date is today
+    // 🔹 Step 1: Find members whose membership_end <= today
     const membersToExpire = await Member.find({
-      $or: [
-        { membership_end: { $gte: startOfToday, $lte: endOfToday } },
-        { "currentGym.membership_end": { $gte: startOfToday, $lte: endOfToday } },
-      ],
-      "currentGym.status": "active",
-    }).populate("user currentGym.plan");
+      "currentGym.membership_end": { $lte: endOfToday },
+    });
 
     if (!membersToExpire.length) {
-      console.log("✅ No memberships expiring today.");
-      return res.status(200).json({ message: "No memberships expiring today." });
-    }
+      console.log("✅ No members found with expired membership dates.");
+    } else {
+      console.log(`⚠️ Found ${membersToExpire.length} members with expired memberships.`);
 
-    // 🧩 Expire all found memberships
-    for (const member of membersToExpire) {
-      member.currentGym.status = "expired";
-      await member.save();
-
-      console.log(
-        `🚫 Membership expired for ${member.user?.email || "unknown"} — Plan: ${
-          member.currentGym?.plan?.name || "N/A"
-        }`
+      // 🔹 Update Members collection
+      const memberResult = await Member.updateMany(
+        { "currentGym.membership_end": { $lte: endOfToday } },
+        {
+          $set: {
+            "currentGym.status": "expired",
+            fee_status: "expired",
+          },
+        }
       );
+
+      console.log(`✅ Updated ${memberResult.modifiedCount} members as expired.`);
     }
 
-    return res.status(200).json({
-      success: true,
-      message: `${membersToExpire.length} memberships expired successfully.`,
-    });
-  } catch (err) {
-    console.error("❌ Error expiring memberships:", err);
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
+    // 🔹 Step 2: Cross-check FeeCollection also
+    const allExpiredMembers = await Member.find({
+      "currentGym.status": "expired",
+    }).select("_id");
+
+    if (!allExpiredMembers.length) {
+      console.log("✅ No expired members found to sync in FeeCollection.");
+    } else {
+      const memberIds = allExpiredMembers.map((m) => m._id);
+
+      // Update FeeCollection where member is expired but fee is not
+      const feeResult = await feesCollectionModel.updateMany(
+        {
+          member: { $in: memberIds },
+          status: { $ne: "pending" },
+        },
+        {
+          $set: {
+            status: "pending",
+          },
+        }
+      );
+
+      console.log(`✅ Updated ${feeResult.modifiedCount} FeeCollection records to expired.`);
+    }
+
+    // 🔹 Step 3: Update MembershipHistory (NEW)
+    const historyResult = await MembershipHistory.updateMany(
+      { membership_end: { $lte: endOfToday }, status: { $ne: "expired" } },
+      { $set: { status: "expired" } }
+    );
+
+    console.log(`📘 Updated ${historyResult.modifiedCount} MembershipHistory records to expired.`);
+    console.log("🎯 Membership, FeeCollection & History fully synced!");
+  } catch (error) {
+    console.error("❌ Error expiring memberships:", error.message);
   }
 };
 
+// export const clearMembersWithoutGym = async () => {
+//   try {
+//     console.log("🧹 Checking members whose currentGym.gym is missing or null...");
 
+//     // 🔍 Find members jinke currentGym null nahi hai lekin gym missing/null hai
+//     const membersToClear = await Member.find({
+//       $and: [
+//         { currentGym: { $ne: null } },
+//         {
+//           $or: [
+//             { "currentGym.gym": { $exists: false } },
+//             { "currentGym.gym": null },
+//           ],
+//         },
+//       ],
+//     });
+
+//     if (!membersToClear.length) {
+//       console.log("✅ No members found with empty gym in currentGym.");
+//       return;
+//     }
+
+//     console.log(`⚠️ Found ${membersToClear.length} members to clear.`);
+
+//     // 🧩 Clear each member’s currentGym safely
+//     for (const member of membersToClear) {
+//       await Member.findByIdAndUpdate(member._id, {
+//         $set: { currentGym: null },
+//       });
+//       console.log(`🧽 Cleared currentGym for member: ${member._id}`);
+//     }
+
+//     console.log(`✅ Successfully cleared ${membersToClear.length} members.`);
+//   } catch (error) {
+//     console.error("❌ Error clearing members without gym:", error.message);
+//   }
+// };
 export const handleMembershipExpiry = async () => {
   try {
     console.log("🔔 Running membership expiry check...");

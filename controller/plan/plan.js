@@ -338,7 +338,7 @@ export const renewMemberPlan = async (req, res) => {
     );
 
     // 🔍 3️⃣ Fetch selected plan details
-    const gymPlan = await GymPlan.findById(planId).populate("planId", "name");
+    const gymPlan = await GymPlan.findOne({planId:planId}).populate("planId", "name");
     if (!gymPlan) {
       return res
         .status(404)

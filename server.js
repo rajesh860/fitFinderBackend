@@ -7,8 +7,12 @@ import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import trainerRoutes from "./routes/trainerRoutes.js";
 import {
+  
+  // clearMembersWithoutGym,
   // backfillAllMembersAbsentAttendance,
   dailyCronJobs,
+  expireTodayMemberships,
+  // activateValidMemberships,
 } from "./controller/cronJobs.js";
 import cron from "node-cron";
 import "./env.js"; // MongoDB connection
@@ -33,7 +37,9 @@ app.use("/admin", adminRoutes);
 app.use("/gym", gymRoutes);
 app.use("/user", userRoutes);
 app.use("/trainer", trainerRoutes);
+// expireTodayMemberships()
 // markAbsentMembers()
+// clearMembersWithoutGym()
 dailyCronJobs();
 
 // Har month ke 1st date 00:00 AM pe run hoga

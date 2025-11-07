@@ -94,6 +94,6 @@ router.get("/get-review/:gymId", authMiddleware, getReview);
 router.get("/get-trainer-list", authMiddleware, trainerList);
 router.post("/renew-plan", authMiddleware, renewMemberPlan);
 
-router.get("/:gymId/analytics", getGymDashboardController);
+router.get("/dashboard/analytics",authMiddleware, getGymDashboardController);
 
 export default router;

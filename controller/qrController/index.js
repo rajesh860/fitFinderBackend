@@ -48,44 +48,64 @@ export const scanGymQR = async (req, res) => {
         .status(400)
         .json({ success: false, message: "QR data missing" });
 
+    // ✅ Parse & verify QR
     const parsed = JSON.parse(qrData);
-
     if (parsed.secret !== (process.env.QR_SECRET || "fitmeGym2025@Secure!"))
       return res.status(403).json({ success: false, message: "Invalid QR" });
 
+    // ✅ Gym verify
     const gym = await Gym.findById(parsed.gymId);
     if (!gym)
       return res.status(404).json({ success: false, message: "Gym not found" });
 
+    // ✅ Member verify (user + current gym match)
     const member = await Member.findOne({
       user: userId,
       "currentGym.gym": gym._id,
     });
+
     if (!member)
       return res
         .status(400)
         .json({ success: false, message: "You are not a member of this gym" });
 
-    const today = dayjs().startOf("day").toDate();
+    // ✅ Check membership plan validity
+    const currentPlan = member.currentPlan; // ensure this field exists in your model
+    const today = dayjs();
+
+    if (
+      !currentPlan ||
+      !currentPlan.endDate ||
+      dayjs(currentPlan.endDate).isBefore(today, "day")
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Your membership has expired. Please renew your plan.",
+      });
+    }
+
+    // ✅ Check if already marked today
+    const todayDate = today.startOf("day").toDate();
     const existing = await Attendance.findOne({
       member: member._id,
       gym: gym._id,
-      date: today,
+      date: todayDate,
     });
 
     if (existing)
       return res.json({ success: true, message: "Attendance already marked" });
 
+    // ✅ Mark attendance
     await Attendance.create({
       member: member._id,
       gym: gym._id,
-      date: today,
+      date: todayDate,
       status: "present",
     });
 
     res.json({ success: true, message: "✅ Attendance marked successfully" });
   } catch (err) {
-    console.error(err);
+    console.error("Error in scanGymQR:", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };

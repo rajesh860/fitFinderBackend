@@ -7,9 +7,18 @@ const EmergencyContactSchema = new mongoose.Schema({
   relation: String,
 });
 
+
 const CurrentMembershipSchema = new mongoose.Schema({
   gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" },
-  plan: { type: mongoose.Schema.Types.ObjectId, ref: "Plan" },
+  plan: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "Plan",
+    default: null  // ✅ Allow null values
+  },
+  // planName: {  // ✅ New field for storing plan name directly
+  //   type: String,
+  //   default: "N/A"
+  // },
   membership_start: { type: Date, default: Date.now },
   membership_end: { type: Date },
   removedBy: { type: String },
@@ -18,7 +27,7 @@ const CurrentMembershipSchema = new mongoose.Schema({
     enum: ["active", "expired", "removed"],
     default: "active",
   },
-   trainers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Trainer" }], // ✅ Add this
+  trainers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Trainer" }],
 });
 const MemberSchema = new mongoose.Schema(
   {
