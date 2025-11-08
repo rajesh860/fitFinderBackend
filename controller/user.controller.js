@@ -504,6 +504,7 @@ export const approveGymBooking = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Member not found for this user" });
     }
+
     // 5️⃣ Validate Plan
     const gymPlan = await GymPlan.findOne({
       gymId: request.gym._id,
@@ -553,10 +554,22 @@ export const approveGymBooking = async (req, res) => {
       status: "active",
     };
 
-    // 9️⃣ Save member initially
+    // 9️⃣ Calculate pending amount
+    const pendingAmount = totalAmount - paidAmount;
+    
+    // 🔟 Update member fee_status
+    if (pendingAmount <= 0) {
+      member.fee_status = "paid";
+    } else if (paidAmount > 0) {
+      member.fee_status = "pending";
+    } else {
+      member.fee_status = "overdue";
+    }
+
+    // 1️⃣1️⃣ Save member
     await member.save();
 
-    // 🔟 Membership History
+    // 1️⃣2️⃣ Membership History
     await MembershipHistory.create({
       member: member._id,
       gym: request.gym._id,
@@ -566,42 +579,43 @@ export const approveGymBooking = async (req, res) => {
       status: "active",
     });
 
-    // 1️⃣1️⃣ Fee Collection
-    const pendingAmount = totalAmount - paidAmount;
+    // 1️⃣3️⃣ Fee Collection (Updated according to your schema)
+    const currentPlanData = {
+      planName: gymPlan.planId.name,
+      totalAmount: totalAmount,
+      paidAmount: paidAmount,
+      pendingAmount: pendingAmount,
+      startDate: startDate,
+      endDate: endDate,
+      status: pendingAmount > 0 ? "pending" : "completed",
+      mode: paymentMode || "cash",
+      remark: remark || "Initial payment",
+    };
+
+    // Create payment entry (using the same structure as CurrentPlanSchema)
+    const paymentEntry = {
+      planName: gymPlan.planId.name,
+      totalAmount: totalAmount,
+      paidAmount: paidAmount,
+      pendingAmount: pendingAmount,
+      startDate: startDate,
+      endDate: endDate,
+      status: pendingAmount > 0 ? "pending" : "completed",
+      mode: paymentMode || "cash",
+      remark: remark || "Initial payment",
+    };
+
     await feesCollectionModel.create({
       member: member._id,
       gym: request.gym._id,
-      planName: gymPlan.planId.name,
-      totalAmount,
-      paidAmount,
-      pendingAmount,
-      startDate,
-      endDate,
-      status: pendingAmount > 0 ? "pending" : "completed",
-      payments: [
-        {
-          amount: paidAmount,
-          date: new Date(),
-          mode: paymentMode,
-          remark,
-        },
-      ],
+      current: currentPlanData,
+      payments: [paymentEntry],
     });
 
-    // 1️⃣2️⃣ Update member fee_status
-    if (pendingAmount <= 0) {
-      member.fee_status = "paid";
-    } else if (paidAmount > 0) {
-      member.fee_status = "pending";
-    } else {
-      member.fee_status = "overdue";
-    }
-    await member.save();
-
-    // 1️⃣3️⃣ Delete Booking Request
+    // 1️⃣4️⃣ Delete Booking Request
     await GymBooking.findByIdAndDelete(requestId);
 
-    // 1️⃣4️⃣ Response
+    // 1️⃣5️⃣ Response
     return res.status(200).json({
       success: true,
       message: `✅ Booking approved with ${gymPlan.planId.name}. ₹${paidAmount} collected.`,
