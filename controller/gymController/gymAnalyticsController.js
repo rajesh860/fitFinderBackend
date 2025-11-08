@@ -27,90 +27,46 @@ export const getGymDashboardController = async (req, res) => {
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    // 🔹 Step 1: Get all members whose currentGym.gym matches
-    const activeMembers = await Member.find(
-      { "currentGym.gym": gymObjectId },
-      { _id: 1 }
-    ).lean();
+    // 🔹 Step 1: Get all fee collections for this gym
+    const feeCollections = await FeeCollection.find({ 
+      gym: gymObjectId 
+    })
+    .populate('member')
+    .lean();
 
-    const memberIds = activeMembers.map((m) => m._id);
+    if (!feeCollections.length)
+      return res.status(404).json({ success: false, message: "No fee collections found" });
 
-    // 🧾 Step 2: Calculate This Month Summary
-    const thisMonthSummary = await FeeCollection.aggregate([
-      { $match: { member: { $in: memberIds } } },
-      { $unwind: "$payments" },
-      {
-        $match: {
-          "payments.date": { $gte: startOfThisMonth, $lte: endOfThisMonth },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          totalAmount: { $sum: "$totalAmount" },
-          paidAmount: { $sum: "$payments.amount" },
-          pendingAmount: { $sum: "$pendingAmount" },
-        },
-      },
-    ]);
+    // 🔹 Step 2: Calculate totals from CURRENT objects (consistent with getAllFeeCollections)
+    let totalCollection = 0;
+    let thisMonthPaid = 0;
+    let lastMonthPaid = 0;
 
-    // 🧾 Step 3: Last Month Summary
-    const lastMonthSummary = await FeeCollection.aggregate([
-      { $match: { member: { $in: memberIds } } },
-      { $unwind: "$payments" },
-      {
-        $match: {
-          "payments.date": { $gte: startOfLastMonth, $lte: endOfLastMonth },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          totalAmount: { $sum: "$totalAmount" },
-          paidAmount: { $sum: "$payments.amount" },
-          pendingAmount: { $sum: "$pendingAmount" },
-        },
-      },
-    ]);
+    feeCollections.forEach(fc => {
+      const paidAmount = fc.current?.paidAmount || 0;
+      totalCollection += paidAmount;
 
-    // 🧾 Step 4: Lifetime Total
-    const totalCollectionSummary = await FeeCollection.aggregate([
-      { $match: { member: { $in: memberIds } } },
-      {
-        $group: {
-          _id: null,
-          totalAmount: { $sum: "$totalAmount" },
-          paidAmount: { $sum: "$paidAmount" },
-          pendingAmount: { $sum: "$pendingAmount" },
-        },
-      },
-    ]);
-
-    const thisMonth =
-      thisMonthSummary[0] || { totalAmount: 0, paidAmount: 0, pendingAmount: 0 };
-    const lastMonth =
-      lastMonthSummary[0] || { totalAmount: 0, paidAmount: 0, pendingAmount: 0 };
-    const totalCollection =
-      totalCollectionSummary[0] || { totalAmount: 0, paidAmount: 0, pendingAmount: 0 };
-
-    // 📈 Growth %
-    const growthPercent =
-      lastMonth.paidAmount === 0
-        ? thisMonth.paidAmount > 0
-          ? 100
-          : 0
-        : Math.round(
-            ((thisMonth.paidAmount - lastMonth.paidAmount) /
-              lastMonth.paidAmount) *
-              100
-          );
-
-    // 👥 Members
-    const totalMembers = activeMembers.length;
-    const lastMonthMembers = await Member.countDocuments({
-      "currentGym.gym": gymObjectId,
-      createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth },
+      // Check if current plan was created/updated this month
+      if (fc.current?.createdAt) {
+        const planDate = new Date(fc.current.createdAt);
+        if (planDate >= startOfThisMonth && planDate <= endOfThisMonth) {
+          thisMonthPaid += paidAmount;
+        }
+        if (planDate >= startOfLastMonth && planDate <= endOfLastMonth) {
+          lastMonthPaid += paidAmount;
+        }
+      }
     });
+
+    // 🔹 Step 3: Get members count
+    const members = await Member.find({ "currentGym.gym": gymObjectId }).lean();
+    const totalMembers = members.length;
+    
+    const lastMonthMembers = members.filter(
+      (m) =>
+        m.currentGym?.membership_start >= startOfLastMonth &&
+        m.currentGym?.membership_start <= endOfLastMonth
+    ).length;
 
     const memberGrowth =
       lastMonthMembers === 0
@@ -120,10 +76,7 @@ export const getGymDashboardController = async (req, res) => {
         : Math.round(((totalMembers - lastMonthMembers) / lastMonthMembers) * 100);
 
     // 🧑‍🏫 Trainers
-    const totalTrainers = await Trainer.countDocuments({
-      gyms: gymObjectId,
-    });
-
+    const totalTrainers = await Trainer.countDocuments({ gyms: gymObjectId });
     const lastMonthTrainers = await Trainer.countDocuments({
       gyms: gymObjectId,
       createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth },
@@ -134,19 +87,29 @@ export const getGymDashboardController = async (req, res) => {
         ? totalTrainers > 0
           ? 100
           : 0
-        : Math.round(((totalTrainers - lastMonthTrainers) / lastMonthTrainers) * 100);
+        : Math.round(
+            ((totalTrainers - lastMonthTrainers) / lastMonthTrainers) * 100
+          );
 
-    // 💰 Step 5: All Plans Summary (only active members’ plans)
+    // 📈 Growth %
+    const growthPercent =
+      lastMonthPaid === 0
+        ? thisMonthPaid > 0
+          ? 100
+          : 0
+        : Math.round(((thisMonthPaid - lastMonthPaid) / lastMonthPaid) * 100);
+
+    // 💰 Step 4: Plan-wise revenue (from current objects)
     const plansStats = await FeeCollection.aggregate([
-      { $match: { member: { $in: memberIds } } },
+      { $match: { gym: gymObjectId } },
       {
         $group: {
-          _id: "$planName",
+          _id: "$current.planName",
           count: { $sum: 1 },
-          totalRevenue: { $sum: "$paidAmount" },
+          totalRevenue: { $sum: "$current.paidAmount" },
         },
       },
-      { $sort: { count: -1, totalRevenue: -1 } },
+      { $sort: { totalRevenue: -1 } },
     ]);
 
     const topSellingPlan = plansStats.length
@@ -157,47 +120,51 @@ export const getGymDashboardController = async (req, res) => {
         }
       : null;
 
-    // 📊 Step 6: Last 12 Months Revenue Trend
-    const startOfYear = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    // 📊 Step 5: Generate last 12 months trend from CURRENT objects
+    const monthNames = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
 
-    const monthlyRevenue = await FeeCollection.aggregate([
-      { $match: { member: { $in: memberIds } } },
-      { $unwind: "$payments" },
-      { $match: { "payments.date": { $gte: startOfYear, $lte: now } } },
-      {
-        $group: {
-          _id: {
-            year: { $year: "$payments.date" },
-            month: { $month: "$payments.date" },
-          },
-          totalPaid: { $sum: "$payments.amount" },
+    const monthlyStats = [];
+
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+      const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+
+      const monthlyRevenue = await FeeCollection.aggregate([
+        { $match: { gym: gymObjectId } },
+        {
+          $match: {
+            "current.createdAt": {
+              $gte: startOfMonth,
+              $lte: endOfMonth
+            }
+          }
         },
-      },
-      { $sort: { "_id.year": 1, "_id.month": 1 } },
-    ]);
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: "$current.paidAmount" }
+          }
+        }
+      ]);
 
-    // Convert to 12-month labeled data
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-    const monthlyStats = Array.from({ length: 12 }, (_, i) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
-      const found = monthlyRevenue.find(
-        (m) => m._id.year === date.getFullYear() && m._id.month === date.getMonth() + 1
-      );
-      return {
+      monthlyStats.push({
         month: monthNames[date.getMonth()],
-        revenue: found ? found.totalPaid : 0,
-      };
-    });
+        revenue: monthlyRevenue[0]?.totalRevenue || 0,
+      });
+    }
 
     // ✅ Final Response
     res.json({
       success: true,
       data: {
         gymId,
-        totalCollection: totalCollection.paidAmount,
-        lastMonth: lastMonth.paidAmount,
+        totalCollection,
+        thisMonthCollection: thisMonthPaid,
+        lastMonthCollection: lastMonthPaid,
         growthPercent,
         totalMembers,
         lastMonthMembers,
@@ -207,7 +174,7 @@ export const getGymDashboardController = async (req, res) => {
         trainerGrowthPercent: trainerGrowth,
         plansStats,
         topSellingPlan,
-        monthlyStats, // ✅ Added for chart
+        monthlyStats,
         message:
           growthPercent >= 0
             ? `Revenue increased by ${growthPercent}% compared to last month`

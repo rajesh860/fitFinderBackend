@@ -4,14 +4,9 @@ export const getAllFeeCollections = async (req, res) => {
   try {
     const { fee_status, searchText } = req.query;
 
-    // ✅ Build base query
     let query = {};
+    if (fee_status) query["current.status"] = fee_status;
 
-    if (fee_status) {
-      query["member.fee_status"] = fee_status;
-    }
-
-    // ✅ Fetch collections with related data
     const collections = await feesCollectionModel
       .find(query)
       .populate({
@@ -25,14 +20,11 @@ export const getAllFeeCollections = async (req, res) => {
 
     let filteredCollections = collections;
 
-    // ✅ If searchText exists → match by name, email, phone, or userId
     if (searchText && searchText.trim() !== "") {
-      const regex = new RegExp(searchText, "i"); // case-insensitive partial match
-
+      const regex = new RegExp(searchText, "i");
       filteredCollections = collections.filter((c) => {
         const user = c.member?.user;
         const userId = String(user?._id || "");
-
         return (
           regex.test(user?.name || "") ||
           regex.test(user?.email || "") ||
@@ -42,21 +34,19 @@ export const getAllFeeCollections = async (req, res) => {
       });
     }
 
-    // 🧮 Calculate summary
     const totalFees = filteredCollections.reduce(
-      (sum, item) => sum + (item.totalAmount || 0),
+      (sum, item) => sum + (item.current?.totalAmount || 0),
       0
     );
     const totalCollection = filteredCollections.reduce(
-      (sum, item) => sum + (item.paidAmount || 0),
+      (sum, item) => sum + (item.current?.paidAmount || 0),
       0
     );
     const totalPending = filteredCollections.reduce(
-      (sum, item) => sum + (item.pendingAmount || 0),
+      (sum, item) => sum + (item.current?.pendingAmount || 0),
       0
     );
 
-    // 🟠 Handle empty results
     if (!filteredCollections.length) {
       return res.status(200).json({
         success: false,
@@ -66,14 +56,23 @@ export const getAllFeeCollections = async (req, res) => {
       });
     }
 
-    // ✅ Final response
+    // ✅ Final Response — removed top-level paidAmount & pendingAmount
     res.status(200).json({
       success: true,
-      data: filteredCollections,
+      message: "Fee collections fetched successfully",
+      data: filteredCollections.map((c) => ({
+        _id: c._id,
+        gym: c.gym,
+        member: c.member,
+        current: c.current, // ✅ Actual current data
+        payments: c.payments || [],
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      })),
       summary: { totalFees, totalCollection, totalPending },
     });
   } catch (err) {
-    console.error("Error fetching fee collections:", err);
+    console.error("❌ Error fetching fee collections:", err);
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -81,6 +80,7 @@ export const getAllFeeCollections = async (req, res) => {
     });
   }
 };
+
 
 
 
@@ -97,7 +97,7 @@ export const addPendingPayment = async (req, res) => {
       });
     }
 
-    // 🔹 Find fee collection
+    // 🔹 Find fee collection with member population
     const feeCollection = await feesCollectionModel
       .findById(feeCollectionId)
       .populate("member");
@@ -109,9 +109,17 @@ export const addPendingPayment = async (req, res) => {
       });
     }
 
-    // 🔹 Validate amount
-    const remainingAmount =
-      feeCollection.totalAmount - feeCollection.paidAmount;
+    // 🔹 Validate amount against current plan's pending amount
+    const currentPlan = feeCollection.current;
+    if (!currentPlan) {
+      return res.status(400).json({
+        success: false,
+        message: "No current plan found for this fee collection",
+      });
+    }
+
+    const remainingAmount = currentPlan.pendingAmount;
+    
     if (amount > remainingAmount) {
       return res.status(400).json({
         success: false,
@@ -119,20 +127,30 @@ export const addPendingPayment = async (req, res) => {
       });
     }
 
-    // 🔹 Add new payment entry
-    feeCollection.payments.push({
-      amount,
+    // 🔹 Create new payment object (using CurrentPlanSchema structure)
+    const newPayment = {
+      planName: currentPlan.planName,
+      totalAmount: currentPlan.totalAmount,
+      paidAmount: amount,
+      pendingAmount: remainingAmount - amount,
+      startDate: currentPlan.startDate,
+      endDate: currentPlan.endDate,
+      status: (remainingAmount - amount) === 0 ? "completed" : "pending",
       mode: mode || "cash",
       remark: remark || "Additional payment",
-    });
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
 
-    // 🔹 Update paidAmount, pendingAmount, status
-    feeCollection.paidAmount += amount;
-    feeCollection.pendingAmount =
-      feeCollection.totalAmount - feeCollection.paidAmount;
+    // 🔹 Add new payment to payments array
+    feeCollection.payments.push(newPayment);
 
-    if (feeCollection.pendingAmount === 0) {
-      feeCollection.status = "completed";
+    // 🔹 Update current plan amounts and status
+    currentPlan.paidAmount += amount;
+    currentPlan.pendingAmount = remainingAmount - amount;
+    
+    if (currentPlan.pendingAmount === 0) {
+      currentPlan.status = "completed";
 
       // 🔹 Update member's fee_status to "paid"
       if (feeCollection.member) {
@@ -140,15 +158,24 @@ export const addPendingPayment = async (req, res) => {
         await feeCollection.member.save();
       }
     } else {
-      feeCollection.status = "pending";
+      currentPlan.status = "pending";
     }
 
+    currentPlan.updatedAt = new Date();
+
+    // 🔹 Save the updated fee collection
     await feeCollection.save();
+
+    // 🔹 Populate again to get updated data in response
+    const updatedFeeCollection = await feesCollectionModel
+      .findById(feeCollectionId)
+      .populate("member")
+      .populate("gym");
 
     res.status(200).json({
       success: true,
       message: "Payment added successfully",
-      data: feeCollection,
+      data: updatedFeeCollection,
     });
   } catch (err) {
     console.error("Error adding payment:", err);

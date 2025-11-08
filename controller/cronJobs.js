@@ -7,7 +7,8 @@ import User from "../models/user.model.js";
 import moment from "moment";
 import feesCollectionModel from "../models/feesCollection.model.js";
 import MembershipHistory from "../models/planHistroy.model.js";
-
+import mongoose from "mongoose";
+import {GymPlan} from "../models/planSchema.js"
 
 // --- Mail transporter
 const transporter = nodemailer.createTransport({
@@ -552,3 +553,199 @@ export const createMembersFromUsers = async (req, res) => {
 
 
 // assignSequentialUserIds()
+
+
+
+// export const autoCreateFeeCollections = async (req, res) => {
+//   try {
+//     const members = await Member.find({})
+//       .populate("currentGym.gym currentGym.plan");
+
+//     if (!members.length)
+//       return res.status(404).json({ success: false, message: "No members found" });
+
+//     let createdCount = 0, skipped = 0, expiredCount = 0;
+
+//     for (const member of members) {
+//       const gym = member?.currentGym?.gym?._id;
+//       const plan = member?.currentGym?.plan?._id;
+//       const startDate = member?.currentGym?.membership_start;
+//       const endDate = member?.currentGym?.membership_end;
+
+//       // ⚙️ Skip agar member ke pass gym ya plan hi nahi
+//       if (!gym || !plan) {
+//         skipped++;
+//         continue;
+//       }
+
+//       // ⚙️ Agar pehle se collection hai → skip karo
+//       const existing = await feesCollectionModel.findOne({ member: member._id, gym });
+//       if (existing) {
+//         skipped++;
+//         continue;
+//       }
+
+//       // ⚙️ Get GymPlan + Plan name
+//       const gymPlan = await GymPlan.findOne({ gymId: gym, planId: plan })
+//         .populate("planId", "name");
+
+//       const totalAmount = gymPlan ? gymPlan.price : 0;
+//       const planName =
+//         gymPlan?.planId?.name ||
+//         member?.currentGym?.plan?.name ||
+//         "N/A";
+
+//       // ⚙️ Check expired
+//       const now = new Date();
+//       const isExpired = endDate && new Date(endDate) < now;
+
+//       // ⚙️ Set current plan data
+//       const current = {
+//         planName,
+//         totalAmount,
+//         paidAmount: totalAmount, // ✅ same as total amount
+//         pendingAmount: 0,
+//         startDate: startDate || now,
+//         endDate: endDate || now,
+//         status: isExpired ? "expired" : "completed", // ✅ completed or expired
+//         mode: "cash",
+//         remark: isExpired
+//           ? "Auto-expired on schedule"
+//           : "Full payment done automatically",
+//       };
+
+//       // ⚙️ Add payment history (fully paid)
+//       const payments = [
+//         {
+//           planName,
+//           totalAmount,
+//           paidAmount: totalAmount,
+//           pendingAmount: 0,
+//           startDate: current.startDate,
+//           endDate: current.endDate,
+//           status: isExpired ? "expired" : "completed",
+//           mode: "cash",
+//           remark: isExpired
+//             ? "Expired without renewal"
+//             : "Auto-marked as paid",
+//         },
+//       ];
+
+//       await feesCollectionModel.create({
+//         member: member._id,
+//         gym,
+//         current,
+//         payments,
+//       });
+
+//       if (isExpired) expiredCount++;
+//       createdCount++;
+//     }
+
+//     console.log(
+//       `✅ FeeCollections created: ${createdCount}, skipped: ${skipped}, expired: ${expiredCount}`
+//     );
+
+//     if (res) {
+//       return res.status(200).json({
+//         success: true,
+//         message: `✅ FeeCollections created: ${createdCount}, skipped: ${skipped}, expired: ${expiredCount}`,
+//       });
+//     }
+//   } catch (error) {
+//     console.error("❌ autoCreateFeeCollections Error:", error);
+//     if (res) {
+//       return res.status(500).json({
+//         success: false,
+//         message: "Server error",
+//         error: error.message,
+//       });
+//     }
+//   }
+// };
+
+// autoCreateFeeCollections()
+
+
+
+
+
+
+export const getSeptemberCollections = async (req, res) => {
+  try {
+    // 🗓 Define September Range (for current year)
+    const year = new Date().getFullYear();
+    const startOfSeptember = new Date(`${year}-09-01T00:00:00.000Z`);
+    const endOfSeptember = new Date(`${year}-09-30T23:59:59.999Z`);
+
+    // 🧮 Find entries whose current.startDate or payments.startDate fall in September
+    const collections = await feesCollectionModel
+      .find({
+        $or: [
+          {
+            "current.startDate": {
+              $gte: startOfSeptember,
+              $lte: endOfSeptember,
+            },
+          },
+          {
+            "payments.startDate": {
+              $gte: startOfSeptember,
+              $lte: endOfSeptember,
+            },
+          },
+        ],
+      })
+      .populate({
+        path: "member",
+        select: "name email phone fee_status currentGym",
+      })
+      .populate({
+        path: "gym",
+        select: "name location",
+      })
+      .lean();
+
+    if (!collections.length) {
+      return res.status(200).json({
+        success: false,
+        message: "No September fee collections found",
+        data: [],
+      });
+    }
+
+    // 🧾 Summary (optional)
+    const totalFees = collections.reduce(
+      (sum, item) => sum + (item.current?.totalAmount || 0),
+      0
+    );
+    const totalCollected = collections.reduce(
+      (sum, item) => sum + (item.current?.paidAmount || 0),
+      0
+    );
+    const totalPending = collections.reduce(
+      (sum, item) => sum + (item.current?.pendingAmount || 0),
+      0
+    );
+console.log(collections)
+    // return res.status(200).json({
+    //   success: true,
+    //   message: "September fee collections fetched successfully",
+    //   count: collections.length,
+    //   summary: {
+    //     totalFees,
+    //     totalCollected,
+    //     totalPending,
+    //   },
+    //   data: collections,
+    // });
+  } catch (error) {
+    console.error("Error fetching September collections:", error);
+    // return res.status(500).json({
+    //   success: false,
+    //   message: "Server error",
+    //   error: error.message,
+    // });
+  }
+};
+// getSeptemberCollections()
