@@ -76,7 +76,7 @@ export const getReview = async (req,res)=>{
     }
   const review = await ReviewModel.find({ gym:gymId }).populate("user" , "name");
     if(!review.length){
-      return res.status(400).json({
+      return res.status(200).json({
         success: false,
         message: "review not found",
       });
