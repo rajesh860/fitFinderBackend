@@ -70,7 +70,7 @@ export const rejectGym = async (req, res) => {
   try {
     const { gym_id } = req.params;
     const { reason } = req.body;
-    const gym = await Gym.findByIdAndUpdate(
+    const gym = await User.findByIdAndUpdate(
       gym_id,
       { status: "rejected", updated_at: Date.now() },
       { new: true }

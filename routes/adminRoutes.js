@@ -10,6 +10,8 @@ import {
 import { authorizeRoles } from "../middleware/roleChecker.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { createPlan } from "../controller/plan/plan.js";
+import {getAdminDashboardData} from "../controller/adminDashboardController/adminDashboard.controller.js"
+import {registerGym} from "../controller/adminDashboardController/gymRegister.js"
 const router = express.Router();
 
 // router.post("/register",authMiddleware,, adminRegister);
@@ -21,5 +23,7 @@ router.put("/:gym_id/reject", authMiddleware, rejectGym);
 router.put("/:gym_id/suspend", authMiddleware, suspendGym);
 router.get("/gym-list", authMiddleware, getGymList);
 router.post("/create-plan-name", authMiddleware, createPlan);
+router.get("/dashboard", getAdminDashboardData);
+router.post("/gym-register", registerGym);
 
 export default router;
