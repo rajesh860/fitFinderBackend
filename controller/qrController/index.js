@@ -90,6 +90,7 @@ console.log(currentPlan)
       member: member._id,
       gym: gym._id,
       date: todayDate,
+      attendanceType:"QR"
     });
 
     if (existing)
@@ -101,6 +102,7 @@ console.log(currentPlan)
       gym: gym._id,
       date: todayDate,
       status: "present",
+      attendanceType:"QR"
     });
 
     res.json({ success: true, message: "✅ Attendance marked successfully" });
