@@ -7,7 +7,7 @@ const AttendanceSchema = new mongoose.Schema(
       ref: "Member",
       required: true,
     },
-    attendanceType:{type:String,enum:["QR, Biometric"],default:"QR"},
+    attendanceType:{type:String,enum: ["QR", "Biometric"],default:"QR"},
     gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym", required: true },
     date: { type: Date, required: true },
     status: { type: String, enum: ["present", "absent"], default: "present" },
