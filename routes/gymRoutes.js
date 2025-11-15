@@ -91,7 +91,7 @@ router.get("/get-fees-collection", authMiddleware, getAllFeeCollections);
 router.post("/add-pending-payment", authMiddleware, addPendingPayment);
 router.get("/get-review/:gymId", authMiddleware, getReview);
 
-router.get("/get-trainer-list", authMiddleware, trainerList);
+router.get("/get-trainer-list/:id", authMiddleware, trainerList);
 router.post("/renew-plan", authMiddleware, renewMemberPlan);
 
 router.get("/dashboard/analytics",authMiddleware, getGymDashboardController);

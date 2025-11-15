@@ -5,31 +5,39 @@ import TrainerReview from "../../models/trainerReview.js";
 
 export const trainerList = async (req, res) => {
   try {
-    // ✅ Gym ID from logged-in user OR query
-    const gymId = req.user?.id
+    const loggedInUserId = req.user?.id;
+    const paramGymId = req.params?.id;
 
-    if (!gymId) {
-      return res.status(400).json({
-        success: false,
-        message: "Gym ID is required to fetch trainers.",
-      });
+    let gymExists = null;
+
+    // 1️⃣ If gym ID passed in URL → /trainer-list/:id
+    if (paramGymId) {
+      gymExists = await Gym.findById(paramGymId).select("_id name location");
     }
 
-    // ✅ Verify Gym existence
-    const gymExists = await Gym.findOne({user:gymId}).select("_id name location");
+    // 2️⃣ If logged-in user is gym owner
+    if (!gymExists && loggedInUserId) {
+      gymExists = await Gym.findOne({ user: loggedInUserId }).select(
+        "_id name location"
+      );
+    }
+
+    // 3️⃣ No gym found → return
     if (!gymExists) {
       return res.status(404).json({
         success: false,
-        message: "Gym not found. Please provide a valid Gym ID.",
+        message: "Gym not found. Invalid gym ID or user is not linked to any gym.",
       });
     }
-    // ✅ Fetch trainers linked to this gym
-    const trainers = await Trainer.find({ gyms: gymExists?._id })
-      .populate("user", "name email phone userId") // Basic user info
-      .populate("gyms", "name location")    // Gym info
-      .select("specialization experience bio averageRating totalReviews photo gallery createdAt");
 
-    // ✅ If no trainers found
+    // 4️⃣ Fetch trainers
+    const trainers = await Trainer.find({ gyms: gymExists._id })
+      .populate("user", "name email phone userId")
+      .populate("gyms", "name location")
+      .select(
+        "specialization experience bio averageRating totalReviews photo gallery createdAt"
+      );
+
     if (!trainers || trainers.length === 0) {
       return res.status(200).json({
         success: true,
@@ -38,22 +46,47 @@ export const trainerList = async (req, res) => {
       });
     }
 
-    // ✅ Response with data
-    res.status(200).json({
+    // 5️⃣ Image Presigning
+    const finalTrainers = await Promise.all(
+      trainers.map(async (trainer) => {
+        const formattedTrainer = trainer.toObject();
+
+        // 📌 presign photo
+        if (formattedTrainer.photo?.length > 0) {
+          formattedTrainer.photo = await Promise.all(
+            formattedTrainer.photo.map((img) => getPresignedUrl(img))
+          );
+        }
+
+        // 📌 presign gallery images
+        if (formattedTrainer.gallery?.length > 0) {
+          formattedTrainer.gallery = await Promise.all(
+            formattedTrainer.gallery.map((img) => getPresignedUrl(img))
+          );
+        }
+
+        return formattedTrainer;
+      })
+    );
+
+    // 6️⃣ Final response
+    return res.status(200).json({
       success: true,
-      count: trainers.length,
+      count: finalTrainers.length,
       gym: gymExists,
-      data: trainers,
+      data: finalTrainers,
     });
+
   } catch (err) {
     console.error("Error in trainerList:", err);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error occurred while fetching trainers.",
+      message: "Server error while fetching trainers.",
       error: err.message,
     });
   }
 };
+
 
 export const getAllTrainerList = async (req, res) => {
   try {

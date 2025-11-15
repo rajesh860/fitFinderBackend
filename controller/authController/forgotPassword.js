@@ -1,6 +1,6 @@
 import User from "../../models/user.model.js";
-import { sendOtpEmail } from "../otpService.js";
 import jwt from "jsonwebtoken";
+import { sendOtpEmail } from "../../utils/emailService.js";
 
 // Helper: Generate random OTP
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();

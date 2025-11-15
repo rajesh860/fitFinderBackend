@@ -2,12 +2,12 @@ import User from "../../models/user.model.js";
 import Admin from "../../models/admin.model.js";
 import Gym from "../../models/gym.model.js";
 import Member from "../../models/member.model.js";
-import { generateOtp, sendOtpEmail } from "../otpService.js";
 import { GymPlan } from "../../models/planSchema.js";
 import dayjs from "dayjs";
 import MembershipHistory from "../../models/planHistroy.model.js";
 import feesCollectionModel from "../../models/feesCollection.model.js";
 import Trainer from "../../models/trainer.model.js"
+import { generateOtp ,sendOtpEmail} from "../../utils/emailService.js";
 export const requestOtp = async (req, res) => {
   try {
     const { name, email, phone, password, userRole, gymName } = req.body;
